@@ -1,0 +1,4 @@
+transformers==4.3.0
+accelerate
+datasets
+tqdm
