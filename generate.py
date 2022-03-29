@@ -58,6 +58,12 @@ def parse_args():
         help="Where to store the final model."
     )
     parser.add_argument(
+        "--dataset_dir", 
+        type=str, 
+        default=None, 
+        help="Where to store the final model."
+    )
+    parser.add_argument(
         '--overwrite_output_dir', 
         default=False, 
         action="store_true",
@@ -69,31 +75,50 @@ def parse_args():
         default=None, 
         help="A seed for reproducible training."
     )
-    
     parser.add_argument(
-        "--n_samples", 
+        "--max_length", 
         type=int, 
-        default=0, 
-        help="Number of samples for in-context learning."
+        default=30, 
+        help="Max length for generation."
     )
+    parser.add_argument(
+        "--temperature", 
+        type=float, 
+        default=0, 
+        help="Temperature for generating in-context examples."
+    )
+    parser.add_argument(
+        "--top_p", 
+        type=float, 
+        default=1, 
+        help="Top-p sampling."
+    )
+    parser.add_argument(
+        "--frequency_penalty", 
+        type=float, 
+        default=1, 
+        help="Top-p sampling."
+    )
+    
+    
     # for manual prompt #
     parser.add_argument(
-        "--prefix",
+        "--positive_prompt",
         type=str,
-        default='',
-        help="Prefix prompt.",
+        default=None,
+        help="Prompt for generating positive in-context sample.",
     )
     parser.add_argument(
-        "--infix",
+        "--negative_prompt",
         type=str,
-        default='',
-        help="Infix prompt.",
+        default=None,
+        help="Prompt for generating negative in-context sample.",
     )
     parser.add_argument(
-        "--postfix",
+        "--neutral_prompt",
         type=str,
-        default='',
-        help="Postfix prompt.",
+        default=None,
+        help="Prompt for generating neutral in-context sample.",
     )
     # until here #
 
@@ -123,12 +148,19 @@ def main():
             if not args.overwrite_output_dir:
                 raise NotADirectoryError(f'Output directory {args.output_dir} exits. Exit program. (overwrite_output_dir=False)')
 
+    if args.dataset_dir is not None:
+        if not os.path.isdir(args.dataset_dir):
+            os.makedirs(args.dataset_dir, exist_ok=True)
+        else:
+            if not args.dataset_dir:
+                raise NotADirectoryError(f'Output directory {args.dataset_dir} exits. Exit program. (overwrite_output_dir=False)')
+
+
     logging_output_file = os.path.join(args.output_dir, "output.log")
     file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s")
     file_handler = logging.FileHandler(logging_output_file)
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
-
 
     args.verbalizer = task_to_verbalizer.get(args.task_name)
 
@@ -144,14 +176,6 @@ def main():
     else:
         raise NotImplementedError('Tasks not in GLUE is not implemented yet.')
 
-    # Labels
-    is_regression = args.task_name == "stsb"
-    if not is_regression:
-        label_list = datasets["train"].features["label"].names
-        num_labels = len(label_list)
-    else:
-        num_labels = 1
-   
     
     # load OpenAI model (set connection)
     model = ModelWrapper(args.model_name_or_path, args.task_name)
@@ -166,22 +190,12 @@ def main():
             (examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key])
         )
         result = dict()
-        sample_num = len(texts[0])
         result['sentence1'] = examples[sentence1_key]
 
         # for single sentence tasks
-        if sentence2_key is None:
-            pass
-        else:
+        if sentence2_key is not None:
             result['sentence2'] = examples[sentence2_key]
-            input_sentences = []
 
-            for sample_index in range(sample_num):
-                input_sentence = args.prefix + texts[0][sample_index] + args.infix + texts[1][sample_index] + args.postfix
-                input_sentences.append(input_sentence)
-
-        result['input_sentence'] = input_sentences
-        
         # Map labels to IDs (not necessary for GLUE tasks)
         if "label" in examples:
             result["labels"] = examples["label"]
@@ -194,10 +208,6 @@ def main():
         desc="Preparing dataset",
     )
 
-    if "train" not in processed_datasets:
-        raise ValueError("--do_train requires a train dataset")
-    train_dataset = processed_datasets["train"]
-
     if "validation" not in processed_datasets and "validation_matched" not in processed_datasets:
         raise ValueError("--do_eval requires a validation dataset")
     if args.task_name == "mnli":
@@ -206,58 +216,39 @@ def main():
     else:
         eval_dataset = processed_datasets["validation"]
 
-    logger.info(f'# TRAIN dataset : {len(train_dataset)}')
     logger.info(f'# Eval  dataset : {len(eval_dataset)}')
-    # TODO : fix?
-    # for random sampling #
-    train_dataset_length = len(train_dataset)
     ## DONE LOADING DATASET ##
     
-    correct_count=0
-
     start_time = time.time()
 
-    result_writer = os.path.join(args.output_dir, "wrong_samples.tsv")
+    result_writer = os.path.join(args.dataset_dir, f"t_{args.temperature}_p_{args.top_p}_fp_{args.frequency_penalty}.tsv")
     with open(result_writer, "w") as file_writer:
         tsv_writer = csv.writer(file_writer, delimiter='\t')
-        tsv_writer.writerow([args.prefix, args.infix, args.postfix])
-        tsv_writer.writerow(['index', 'sentence1', 'sentence2', 'prediction', 'label', 'top_logprobs'])
+        tsv_writer.writerow([args.positive_prompt, args.negative_prompt])
+        tsv_writer.writerow(['index', 'sentence1', 'sentence2', 'label', 'entailment', 'not entailment'])
         for index, inputs in tqdm(enumerate(eval_dataset)):
-
-            ## select 
-            if args.n_samples > 0:
-                in_context_samples = []
-                for _ in range(args.n_samples):
-                    random_index = random.randint(0, train_dataset_length-1)
-                    random_sample = train_dataset[random_index]
-                    random_sample_input_sentence = random_sample['input_sentence']
-                    random_sample_label = random_sample['labels']
-                    for k,v in args.verbalizer.items():
-                        if random_sample_label == v:
-                            random_sample_input_sentence = random_sample_input_sentence + k
-                            break
-                    in_context_samples.append(random_sample_input_sentence)
-                in_context_samples = ' '.join(in_context_samples)
-                inputs['input_sentence'] = ' '.join([in_context_samples, inputs['input_sentence']])
-
-            label = inputs['labels']
-            prediction, results_dict = model.forward(**inputs)
-
-
-            if prediction == label:
-                correct_count += 1
-            else:
-                tsv_writer.writerow([index, inputs['sentence1'], inputs['sentence2'], prediction, label, str(results_dict)])
-
-            # TODO : removes
-            # if index > 20:
-            #     break
             
-        result = correct_count / len(eval_dataset) * 100
-        logger.info(f'Result : {correct_count} / {len(eval_dataset)} = {result}%')
+            row = [index, inputs['sentence1'], inputs['sentence2'], inputs['labels']]
 
-        tsv_writer.writerow([correct_count, len(eval_dataset), result])
+            generated_result = model.generate(
+                positive_prompt=args.positive_prompt, 
+                negative_prompt=args.negative_prompt,
+                neutral_prompt=args.neutral_prompt,
+                max_length=args.max_length,
+                temperature=args.temperature,
+                top_p=args.top_p,
+                frequency_penalty=args.frequency_penalty,
+                **inputs
+            )
 
+
+            for generated_sentence, expected_label in generated_result:
+                if generated_sentence is None:
+                    continue
+
+                row.append(generated_sentence)
+
+            tsv_writer.writerow(row)
         
     end_time = time.time()
     logger.info(f'Total time : {end_time - start_time}')

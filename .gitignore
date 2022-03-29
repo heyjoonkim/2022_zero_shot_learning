@@ -1,8 +1,6 @@
-sst2_gpt/
-sst2_baseline/
-sst2/
-mnli_gpt2_xl/
-mnli_test/
+outputs/*
+scripts/*
+generated_datasets/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

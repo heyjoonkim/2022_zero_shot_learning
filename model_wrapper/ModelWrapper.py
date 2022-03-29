@@ -1,65 +1,167 @@
-
-from typing import Tuple
+import os
 import time
 
-import torch
+import openai
+from transformers import AutoTokenizer
 
-from transformers import AutoModel
-
-from .InputProcessor import BaseInputProcessor, PromptInputProcessor
-from .OutputProcessor import BaseOutputProcessor
+from dataset_utils import task_to_verbalizer
 
 
+class ModelWrapper:
+    def __init__(self, model, task_name):
 
-class ModelWrapper(torch.nn.Module):
-    def __init__(self, config, model_name_or_path):
-        super(ModelWrapper, self).__init__()
+        # init OpenAI API #
+        openai.api_key = os.getenv('OPENAI_API_KEY')
+        openai.organization = os.getenv('ORGANIZATION_ID')
+        # until here #
 
-        self.config = config
+        self.model = model
 
-        # Main model
-        self.transformer = AutoModel.from_pretrained(
-                                        model_name_or_path,
-                                        from_tf=bool(".ckpt" in model_name_or_path),
-                                        config=config,
-                                        add_pooling_layer=False)
+        # check if the model name is valid #
+        engine_list = openai.Engine.list()
+        engine_list = [engine['id'] for engine in engine_list['data']]
+        assert self.model in engine_list, f'{self.model} not in {engine_list}'
+        print(f'Using GPT-3 engine : {self.model}')
 
-        self.embedding_dim = self.transformer.get_input_embeddings().embedding_dim
-        self.num_labels = config.num_labels
+        # check if there is a valid verbalizer defined #
+        assert task_name in task_to_verbalizer, f'{task_name} not in {task_to_verbalizer.keys()}'
+        self.task_name = task_name
+        self.verbalizer = task_to_verbalizer.get(task_name)
 
+        # tokenizer for GPT2 #
+        self.tokenizer = AutoTokenizer.from_pretrained('gpt2')
 
-        if self.config.apply_prompt:
-            self.input_processor = PromptInputProcessor(config=config, embeddings=self.transformer.get_input_embeddings(), plm=self.transformer)
-        else:
-            # default input and output processor for out toy task
-            self.input_processor = BaseInputProcessor(config=config, embeddings=self.transformer.get_input_embeddings())
-        # goes through (embedding_dim, num_label) linear layer
-        self.output_processor = BaseOutputProcessor(config=config, embedding_dim=self.embedding_dim, num_labels=self.num_labels, model_name_or_path=model_name_or_path)
-    
+        # delayed time when OpenAI API fails.
+        self.retry_delay = 10
+
     def forward(
         self,
-        input_ids=None,
-        past_key_values=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
+        input_sentence,
+        sentence1=None,
+        sentence2=None,
         labels=None,
-        use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        **kwargs,
+    ):
 
-        inputs_embeds, attention_mask = self.input_processor(input_ids=input_ids, attention_mask=attention_mask)
-        outputs = self.transformer(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
+        max_label_prob = -float('inf')
+        predicted_label = None
+        results_dict = dict()
 
-        # shape : (batch, length, embedding_dim)
-        last_hidden_state = outputs.last_hidden_state
+        for label_token,label in self.verbalizer.items():
+            input_sentence_with_label = input_sentence + label_token
+            print(input_sentence_with_label)
 
-        # loss        : (batch, )
-        # predictions : (batch, )
-        loss, predictions = self.output_processor(last_hidden_state=last_hidden_state, attention_mask=attention_mask, labels=labels)
+            sleep_time = 1
+            while True:
+                try:
+                    response = openai.Completion.create(
+                        engine=self.model,
+                        prompt=input_sentence_with_label,
+                        temperature=0,
+                        max_tokens=0,
+                        top_p=1,
+                        frequency_penalty=0,
+                        presence_penalty=0,
+                        echo=True,
+                        logprobs=1
+                    )
+                    break
+                except:
+                    print(f'Error from OpenAI API. Pending for {sleep_time} seconds...')
+                    time.sleep(sleep_time)
+                    sleep_time += self.retry_delay
+
+            data = response['choices'][0]
+            logprobs = data['logprobs']
+            token_logprobs = logprobs['token_logprobs']
+
+            # check tokenization of the label token #
+            label_token_input_ids = self.tokenizer(label_token)['input_ids']
+            label_token_ids_length = len(label_token_input_ids)
+
+            print(label_token, '->', label_token_ids_length)
+
+            # all the log-probabilities for the label token 
+            label_probs = token_logprobs[-label_token_ids_length:]
+            label_prob = 0
+            for prob in label_probs:
+                label_prob += prob
+
+            label_prob = token_logprobs[-1]
+
+            results_dict[label_token] = label_prob
+
+            if label_prob > max_label_prob:
+                max_label_prob = label_prob
+                predicted_label = label
+
+
+        return predicted_label, results_dict
         
-        return loss, predictions
+    
+    def generate(
+        self,
+        positive_prompt=None,
+        neutral_prompt=None,
+        negative_prompt=None,
+        max_length=None,
+        temperature=None,
+        top_p=None,
+        frequency_penalty=None,
+        input_sentence=None,
+        sentence1=None,
+        sentence2=None,
+        labels=None,
+        **kwargs,
+    ):
+
+
+        positive_label = 0
+        negative_label = 1 if neutral_prompt is None else 2
+        neutral_label = 1 if neutral_prompt is not None else None
+
+        prompt_list = [(positive_prompt, positive_label), (neutral_prompt, neutral_label), (negative_prompt, negative_label)]
+
+        generated_result = []
+        for prompt, expected_label in prompt_list:
+            if prompt is None:
+                generated_result.append((None, None))
+                continue
+            
+            input_sentence_with_prompt = sentence1 + prompt
+
+            sleep_time = 1
+            while True:
+                try:
+                    response = openai.Completion.create(
+                        engine=self.model,
+                        prompt=input_sentence_with_prompt,
+                        temperature=temperature,
+                        max_tokens=max_length,
+                        top_p=top_p,
+                        frequency_penalty=frequency_penalty,
+                    )
+                    break
+                except:
+                    print(f'Error from OpenAI API. Pending for {sleep_time} seconds...')
+                    time.sleep(sleep_time)
+                    sleep_time += self.retry_delay
+            data = response['choices'][0]
+            generated_text = data['text']
+
+
+            # we only use the first generated text
+            if '.' in generated_text:
+                index = generated_text.rindex('.')
+                generated_text = generated_text[:index]
+
+            generated_text = generated_text.strip()
+            generated_text = generated_text + '.'
+
+            print(input_sentence_with_prompt, '->', generated_text)
+
+            generated_result.append((generated_text, expected_label))
+        
+        # list : [(generated_text, exptected_label), ..., ]
+        return generated_result
+        
