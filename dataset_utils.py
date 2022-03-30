@@ -148,12 +148,17 @@ task_to_verbalizer = {
         # "negative" : 1    # not entailment
         # "entailment" : 0,  # entailment
         # "not entailment" : 1    # not entailment
-        # "Yes" : 0,  # entailment
-        # "No" : 1    # not entailment
-        "True" : 0,  # entailment
-        "False" : 1    # not entailment
+        "Yes" : 0,  # entailment
+        "No" : 1    # not entailment
+        # "True" : 0,  # entailment
+        # "False" : 1    # not entailment
     },
-    "sst2": None,
+    "sst2": {
+        "negative" : 0,
+        "positive" : 1,
+        # "bad" : 0,
+        # "good" : 1,
+    },
     "stsb": None,
     "wnli": None,
     "sst5": None,

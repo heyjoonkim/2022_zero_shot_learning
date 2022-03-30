@@ -1,6 +1,10 @@
 outputs/*
 scripts/*
 generated_datasets/*
+tmp/*
+
+# deepspeed configs
+ds_configs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
