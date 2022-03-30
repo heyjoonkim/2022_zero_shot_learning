@@ -96,7 +96,6 @@ class GPT2Wrapper(torch.nn.Module):
 
         self.ids_list = self._convert_verbalizer_to_ids(self.label2token, self.tokenizer)
 
-
         # for output processing (output logits -> loss, prediction)
         self.output_processor = BaseOutputProcessor(
             config=config, 

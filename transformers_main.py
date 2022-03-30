@@ -7,7 +7,7 @@ import random
 import json
 
 import datasets
-from datasets import load_dataset, load_metric, DatasetDict
+from datasets import load_dataset, load_metric, DatasetDict, Dataset
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -28,8 +28,8 @@ import deepspeed
 from torch.utils.data.distributed import DistributedSampler
 
 from model_wrapper.TransformersModelWrapper import GPT2Wrapper
-from utils import save_config, set_value_to_shared_json_file, get_value_from_shared_json_file
-from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer
+from utils import save_config
+from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer, prepare_incontext_sampling, prepend_incontext_samples
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,13 @@ def parse_args():
         default=None,
         help="The name of the glue task to train on.",
         choices=list(task_to_keys.keys()),
+    )
+    parser.add_argument(
+        "--benchmark_name",
+        type=str,
+        default=None,
+        help="The name of the benchmark to train on.",
+        choices=['glue', 'super_glue'],
     )
     parser.add_argument(
         "--train_file", 
@@ -111,6 +118,12 @@ def parse_args():
         type=int, 
         default=0, 
         help="Number of samples for in-context learning."
+    )
+    parser.add_argument(
+        '--balance_sample', 
+        default=False, 
+        action="store_true",
+        help='Balance samples per label for in-context learning.'
     )
     # for manual prompt #
     parser.add_argument(
@@ -196,6 +209,7 @@ def main():
     # If passed along, set the training seed now.
     if args.seed is not None:
         set_seed(args.seed)
+        random.seed(args.seed)
 
     # Handle the repository creation & SummaryWriter
     if args.local_rank == 0:
@@ -203,21 +217,33 @@ def main():
 
     # In distributed training, the load_dataset function guarantee that only one local process can concurrently
     # download the dataset.
-    if args.task_name is not None:
+    if args.task_name is not None and args.benchmark_name is not None:
         # Downloading and loading a dataset from the hub.
         raw_datasets = DatasetDict()
        
-        raw_train_dataset = load_dataset("glue", args.task_name, split=f'train')
+        raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
         # for mnli 
         if args.task_name == "mnli":
-            raw_eval_dataset = load_dataset("glue", args.task_name, split='validation_matched')
+            raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation_matched')
         else:
-            raw_eval_dataset = load_dataset("glue", args.task_name, split=f'validation')
-        
-        raw_datasets['train'] = raw_train_dataset
-        raw_datasets['validation'] = raw_eval_dataset
+            raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'validation')
+    # for datasets from file.
+    elif args.task_name in task_to_path:
+        dataset_processor = task_to_path[args.task_name]["dataset_processor"]
+        train_file_path = task_to_path[args.task_name]["train"]
+        validation_file_path = task_to_path[args.task_name]["validation"]
+
+        # train set
+        train_dict = dataset_processor(train_file_path)
+        raw_train_dataset = Dataset.from_dict(train_dict)
+        # validation set
+        validation_dict = dataset_processor(validation_file_path)
+        raw_eval_dataset = Dataset.from_dict(validation_dict)
     else:
-        raise NotImplementedError('Tasks for GLUE benchmarks are implemented yet.')
+        raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
+
+    raw_datasets['train'] = raw_train_dataset
+    raw_datasets['validation'] = raw_eval_dataset
 
     if args.local_rank == 0:
         logger.info('TRAIN / VALIDATION / TEST split.')
@@ -292,6 +318,15 @@ def main():
 
     padding = "max_length" if args.pad_to_max_length else False
 
+    label2samples, full_train_samples = prepare_incontext_sampling(
+        train_samples=raw_datasets['train'],
+        verbalizer=args.verbalizer,
+        sentence1_key=sentence1_key,
+        sentence2_key=sentence2_key,
+        prefix=args.prefix,
+        infix=args.infix,
+        postfix=args.postfix)
+
     def preprocess_function(examples):
         # Tokenize the texts
         texts = (
@@ -309,6 +344,14 @@ def main():
                 sentence2 = ""
             
             prompted_setence = args.prefix + sentence1 + args.infix + sentence2 + args.postfix
+
+            prompted_setence = prepend_incontext_samples(
+                label2samples=label2samples,
+                full_train_samples=full_train_samples,
+                k=args.n_samples,
+                balance_sample=args.balance_sample,
+                input_sentence=prompted_setence
+            )
 
             prompted_setences.append(prompted_setence)
 
@@ -343,7 +386,7 @@ def main():
         # Log a few random samples from the training set:
         for index in random.sample(range(len(train_dataset)), 1):
             logger.info(f"Sample {index} of the training set: {train_dataset[index]}.")
-
+            logger.info(f'-> {tokenizer.decode(token_ids=train_dataset[index]["input_ids"], skip_special_tokens=True)}')
     # DataLoaders creation:
     if args.pad_to_max_length:
         data_collator = default_data_collator
@@ -357,7 +400,7 @@ def main():
     
     # Get the metric function
     if args.task_name is not None:
-        metric = load_metric('glue', args.task_name, num_process=args.world_size, process_id=args.local_rank)
+        metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
     else:
         metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
 
@@ -387,14 +430,10 @@ def main():
             )
     eval_metric = metric.compute()
 
-    print(f'{args.local_rank} -> {eval_metric}')
-    exit()
-
-    if args.local_rank == 0:
-        if args.n_samples == 0:
-            logger.info(f"Zero-shot evaluation result : {eval_metric}")
-        else:
-            logger.info(f"{args.n_samples}-shot evaluation result : {eval_metric}")
+    if args.n_samples == 0:
+        logger.info(f"{args.local_rank} -> Zero-shot evaluation result : {eval_metric}")
+    else:
+        logger.info(f"{args.local_rank} -> {args.n_samples}-shot evaluation result : {eval_metric}")
                 
 if __name__ == "__main__":
     main()

@@ -5,6 +5,8 @@
 #
 
 import csv
+import random
+from select import select
 
 def custom_generate_dataset_dict(filename):
     input_list = []
@@ -48,6 +50,9 @@ def sst5_generate_dataset_dict(filename):
             label = int(line[:comma_index])
             input_sentence = line[comma_index+1:]
             
+            if label.startswith('"') and label.endswith('"'):
+                label = label.replace('"', '')
+
             if input_sentence.startswith('"') and input_sentence.endswith('"'):
                 input_sentence = input_sentence.replace('"', '')
 
@@ -85,7 +90,6 @@ def trec_generate_dataset_dict(filename):
     # same csv file format as SST-5
     return sst5_generate_dataset_dict(filename)
 
-
 task_to_path = {
     "sst5" : {
         "train" : "/home/heyjoonkim/data/datasets/sst5/train.csv",
@@ -120,6 +124,7 @@ task_to_path = {
 }
 
 task_to_keys = {
+    # GLUE
     "cola": ("sentence", None),
     "mnli": ("premise", "hypothesis"),
     "mrpc": ("sentence1", "sentence2"),
@@ -129,6 +134,10 @@ task_to_keys = {
     "sst2": ("sentence", None),
     "stsb": ("sentence1", "sentence2"),
     "wnli": ("sentence1", "sentence2"),
+    # SuperGLUE
+    "boolq" : ("question", "passage"),
+    "cb" : ("premise", "hypothesis"),
+    # others
     "sst5": ("sentence", None),
     "mr": ("sentence", None),
     "cr": ("sentence", None),
@@ -144,12 +153,12 @@ task_to_verbalizer = {
     "qnli": None,
     "qqp": None,
     "rte": {
-        # "positive" : 0,  # entailment
-        # "negative" : 1    # not entailment
+        # " positive" : 0,  # entailment
+        # " negative" : 1    # not entailment
         # "entailment" : 0,  # entailment
         # "not entailment" : 1    # not entailment
-        "Yes" : 0,  # entailment
-        "No" : 1    # not entailment
+        " Yes" : 0,  # entailment
+        " No" : 1    # not entailment
         # "True" : 0,  # entailment
         # "False" : 1    # not entailment
     },
@@ -158,6 +167,14 @@ task_to_verbalizer = {
         "positive" : 1,
         # "bad" : 0,
         # "good" : 1,
+        # "terrible" : 0,
+        # "great" : 1,
+    },
+    "boolq": None,
+    "cb": {
+        "True" : 0,
+        "False" : 1,
+        "Neither" : 2,
     },
     "stsb": None,
     "wnli": None,
@@ -168,3 +185,83 @@ task_to_verbalizer = {
     "subj": None,
     "trec": None,
 }
+
+
+def prepare_incontext_sampling(train_samples, 
+                                verbalizer,
+                                sentence1_key, 
+                                sentence2_key,
+                                prefix,
+                                infix,
+                                postfix,
+                                ):
+
+    label2token = {v:k for k,v in verbalizer.items()}
+    label2samples = {}
+    full_samples = []
+
+    for sample in train_samples:
+        sentence1 = sample[sentence1_key]
+        label = sample['label']
+        label_token = label2token[label]
+        if sentence2_key is not None:
+            sentence2 = sample[sentence2_key]
+        else:
+            sentence2 = ''
+        
+        full_sentence = prefix + sentence1 + infix + sentence2 + postfix + label_token
+        full_samples.append(full_sentence)
+
+        # empty list if first sample
+        label_list = label2samples.get(label, [])
+        label_list.append(full_sentence)
+        label2samples[label] = label_list
+
+    return label2samples, full_samples
+        
+
+def prepend_incontext_samples(
+                                label2samples,
+                                full_train_samples,
+                                k,
+                                balance_sample,
+                                input_sentence,
+                            ):
+    # no in-context samples = zero-shot learning
+    if k == 0:
+        return input_sentence
+
+    final_sentence = None
+    sep = '\n\n\n'
+
+    if balance_sample:
+        total_count = 0
+        while True:
+            for label, samples in label2samples.items():
+                total_length = len(samples)
+                random_index = random.randint(0, total_length-1)
+                selected_sample = samples[random_index]
+
+                if final_sentence is None:
+                    final_sentence = selected_sample
+                else:
+                    final_sentence = final_sentence + sep + selected_sample
+
+                total_count += 1
+                if total_count == k:
+                    final_sentence = final_sentence + sep + input_sentence
+                    return final_sentence
+    else:
+        total_length = len(input_sentence)
+        for index in range(k):
+            random_index = random.randint(0, total_length-1)
+            selected_sample = full_train_samples[random_index]
+
+            if final_sentence is None:
+                final_sentence = selected_sample
+            else:
+                final_sentence = final_sentence + sep + selected_sample
+       
+        
+    final_sentence = final_sentence + sep + input_sentence
+    return final_sentence
