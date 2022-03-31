@@ -217,9 +217,9 @@ def main():
 
     # In distributed training, the load_dataset function guarantee that only one local process can concurrently
     # download the dataset.
+    raw_datasets = DatasetDict()
     if args.task_name is not None and args.benchmark_name is not None:
         # Downloading and loading a dataset from the hub.
-        raw_datasets = DatasetDict()
        
         raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
         # for mnli 
@@ -249,14 +249,22 @@ def main():
         logger.info('TRAIN / VALIDATION / TEST split.')
         for split, dataset in raw_datasets.items():
             logger.info(f'{split} > {len(dataset)}')
-
+    
+    if args.local_rank == 0:
+        # Log a few random samples from the training set:
+        for index in random.sample(range(len(raw_train_dataset)), 1):
+            logger.info(f"Sample {index} of the training set: {raw_train_dataset[index]}.")
+    
     # Labels
-    if args.task_name is not None:
+    if args.task_name is not None and args.benchmark_name is not None:
         # label_list : ['entailment', 'not_entailment']
         label_list = raw_datasets["train"].features["label"].names
         num_labels = len(label_list)
+    elif args.task_name in task_to_path:
+        label_list = set(raw_datasets["train"]['label'])
+        num_labels = len(label_list)
     else:
-        raise NotImplementedError('Tasks for GLUE benchmarks are implemented yet.')
+        raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
 
     # Load pretrained model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
@@ -399,9 +407,9 @@ def main():
     eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, collate_fn=data_collator, batch_size=args.per_device_batch_size, shuffle=False)
     
     # Get the metric function
-    if args.task_name is not None:
+    if args.task_name is not None and args.benchmark_name is not None:
         metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
-    else:
+    elif args.task_name is not None:
         metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
 
     model_engine, _, _, _ = deepspeed.initialize(model=model, optimizer=None, lr_scheduler=None, config_params=args.ds_config)

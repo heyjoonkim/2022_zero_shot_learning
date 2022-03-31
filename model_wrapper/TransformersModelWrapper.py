@@ -111,7 +111,7 @@ class GPT2Wrapper(torch.nn.Module):
             token = label2token[label_index]
             ids = tokenizer(token)['input_ids']
             if len(ids) > 1:
-                raise NotImplementedError('Verbalizer with more than one token is not implemented yet.')
+                raise NotImplementedError(f'Verbalizer with more than one token is not implemented yet. {token} -> {ids}')
             ids_list.append(ids[0])
             # print(label_index, token, '->', ids)
 

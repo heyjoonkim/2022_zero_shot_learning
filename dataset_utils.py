@@ -43,16 +43,12 @@ def sst5_generate_dataset_dict(filename):
     input_list = []
     label_list = []
     with open(filename) as f:
-        
         for line_index, line in enumerate(f):
             line = line.strip()
             comma_index = line.index(',')
             label = int(line[:comma_index])
             input_sentence = line[comma_index+1:]
             
-            if label.startswith('"') and label.endswith('"'):
-                label = label.replace('"', '')
-
             if input_sentence.startswith('"') and input_sentence.endswith('"'):
                 input_sentence = input_sentence.replace('"', '')
 
@@ -90,6 +86,90 @@ def trec_generate_dataset_dict(filename):
     # same csv file format as SST-5
     return sst5_generate_dataset_dict(filename)
 
+# for AG News
+def agnews_generate_dataset_dict(filename):
+    sentence1_list = []
+    sentence2_list = []
+    label_list = []
+    with open(filename) as f:
+        csv_reader = csv.reader(f, delimiter=',')
+        for line_index, line in enumerate(csv_reader):
+            
+            assert len(line) == 3, f'LINE {line_index} > GOT {line}'
+
+            label = line[0]
+            label = int(label) - 1
+            sentence1 = line[1]
+            sentence1 = sentence1.strip()
+            sentence2 = line[2]
+            sentence2 = sentence2.strip()
+
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+            sentence2_list.append(sentence2)
+    return_dict = {
+        'sentence1' : sentence1_list,
+        'sentence2' : sentence2_list,
+        'label' : label_list
+    }
+
+    return return_dict
+
+# for Yahoo Answers
+def yahoo_generate_dataset_dict(filename):
+    sentence1_list = []
+    sentence2_list = []
+    label_list = []
+    with open(filename) as f:
+        csv_reader = csv.reader(f, delimiter=',')
+        for line_index, line in enumerate(csv_reader):
+
+
+            label = line[0]
+            label = int(label) - 1
+
+            sentences1 = line[:-1]
+            sentence1 = ' '.join(sentences1)
+            sentence1 = sentence1.strip()
+
+            sentence2 = line[-1]
+            sentence2 = sentence2.strip()
+
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+            sentence2_list.append(sentence2)
+    return_dict = {
+        'sentence1' : sentence1_list,
+        'sentence2' : sentence2_list,
+        'label' : label_list
+    }
+
+    return return_dict
+
+# for Yelp Reviews
+def yelp_generate_dataset_dict(filename):
+    sentence1_list = []
+    label_list = []
+    with open(filename) as f:
+        csv_reader = csv.reader(f, delimiter=',')
+        for line_index, line in enumerate(csv_reader):
+            
+            assert len(line) == 2
+
+            label = line[0]
+            label = int(label) - 1
+            sentence1 = line[1]
+            sentence1 = sentence1.strip()
+
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+    return_dict = {
+        'sentence' : sentence1_list,
+        'label' : label_list
+    }
+
+    return return_dict
+
 task_to_path = {
     "sst5" : {
         "train" : "/home/heyjoonkim/data/datasets/sst5/train.csv",
@@ -121,6 +201,21 @@ task_to_path = {
         "validation" : "/home/heyjoonkim/data/datasets/trec/test.csv",
         "dataset_processor" : trec_generate_dataset_dict,
     },
+    "agnews" : {
+        "train" : "/home/heyjoonkim/data/datasets/agnews/train.csv",
+        "validation" : "/home/heyjoonkim/data/datasets/agnews/test.csv",
+        "dataset_processor" : agnews_generate_dataset_dict,
+    },
+    "yahoo" : {
+        "train" : "/home/heyjoonkim/data/datasets/yahoo_answers/train.csv",
+        "validation" : "/home/heyjoonkim/data/datasets/yahoo_answers/test.csv",
+        "dataset_processor" : yahoo_generate_dataset_dict,
+    },
+    "yelp" : {
+        "train" : "/home/heyjoonkim/data/datasets/yelp_review/train.csv",
+        "validation" : "/home/heyjoonkim/data/datasets/yelp_review/test.csv",
+        "dataset_processor" : yelp_generate_dataset_dict,
+    },
 }
 
 task_to_keys = {
@@ -144,6 +239,9 @@ task_to_keys = {
     "mpqa": ("sentence", None),
     "subj": ("sentence", None),
     "trec": ("sentence", None),
+    "agnews": ("sentence1", "sentence2"),
+    "yahoo": ("sentence1", "sentence2"),
+    "yelp": ("sentence", None),
 }
 
 task_to_verbalizer = {
@@ -178,12 +276,43 @@ task_to_verbalizer = {
     },
     "stsb": None,
     "wnli": None,
-    "sst5": None,
     "mr": None,
     "cr": None,
     "mpqa": None,
     "subj": None,
     "trec": None,
+    "agnews": {
+        "World" : 0,
+        "Sports" : 1,
+        "Business" : 2,
+        "Tech" : 3,
+    },
+    "yahoo" : {
+        " Society" : 0,
+        " Science" : 1,
+        " Health" : 2,
+        " Education" : 3,
+        " Computer" : 4,
+        " Sports" : 5,
+        " Business" : 6,
+        " Entertainment" : 7,
+        " Relationship" : 8,
+        " Politics" : 9,
+    },
+    "yelp" : {
+        ' terrible' : 0,
+        ' bad' : 1,
+        ' okay' : 2,
+        ' good' : 3,
+        ' great' : 4,
+    },
+    "sst5" : {
+        ' terrible' : 0,
+        ' bad' : 1,
+        ' okay' : 2,
+        ' good' : 3,
+        ' great' : 4,
+    }
 }
 
 
