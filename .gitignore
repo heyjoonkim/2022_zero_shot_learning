@@ -1,5 +1,5 @@
 outputs/*
-scripts/*
+# scripts/*
 generated_datasets/*
 tmp/*
 

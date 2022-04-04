@@ -25,7 +25,7 @@ import csv
 import random
 
 from tqdm.auto import tqdm
-from datasets import load_dataset
+from datasets import load_dataset, Dataset, DatasetDict
 
 from transformers import AutoTokenizer
 
@@ -64,7 +64,20 @@ def main():
         # Downloading and loading a dataset from the hub.
         datasets = load_dataset("glue", args.task_name)
     else:
-        raise NotImplementedError('Tasks not in GLUE is not implemented yet.')
+        datasets = DatasetDict()
+        dataset_processor = task_to_path[args.task_name]["dataset_processor"]
+        train_file_path = task_to_path[args.task_name]["train"]
+        validation_file_path = task_to_path[args.task_name]["validation"]
+
+        # train set
+        train_dict = dataset_processor(train_file_path)
+        raw_train_dataset = Dataset.from_dict(train_dict)
+        # validation set
+        validation_dict = dataset_processor(validation_file_path)
+        raw_eval_dataset = Dataset.from_dict(validation_dict)
+
+        datasets['train'] = raw_train_dataset
+        datasets['validation'] = raw_eval_dataset
 
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
