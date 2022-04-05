@@ -1,31 +1,25 @@
 """ Finetuning a 🤗 Transformers model for sequence classification on GLUE."""
 import argparse
 import logging
-import math
 import os
 import random
 import json
+import time
 
 import datasets
 from datasets import load_dataset, load_metric, DatasetDict, Dataset
-from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 import transformers
 from transformers.deepspeed import HfDeepSpeedConfig
 from transformers import (
-    AdamW,
     AutoConfig,
     AutoTokenizer,
-    DataCollatorWithPadding,
     PretrainedConfig,
-    default_data_collator,
-    get_scheduler,
     set_seed,
 )
 import torch
 import deepspeed
-from torch.utils.data.distributed import DistributedSampler
 
 from model_wrapper.TransformersModelWrapper import GPT2Wrapper
 from utils import save_config
@@ -47,7 +41,7 @@ def parse_args():
         type=str,
         default=None,
         help="The name of the benchmark to train on.",
-        choices=['glue', 'super_glue'],
+        choices=['glue', 'super_glue', 'huggingface'],
     )
     parser.add_argument(
         "--train_file", 
@@ -219,14 +213,17 @@ def main():
     # download the dataset.
     raw_datasets = DatasetDict()
     if args.task_name is not None and args.benchmark_name is not None:
-        # Downloading and loading a dataset from the hub.
-       
-        raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
-        # for mnli 
-        if args.task_name == "mnli":
-            raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation_matched')
+        if args.benchmark_name == 'huggingface':
+            raw_train_dataset = load_dataset(args.task_name, split='train')
+            raw_eval_dataset = load_dataset(args.task_name, split='test')
         else:
-            raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'validation')
+            # Downloading and loading a dataset from the hub.
+            raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
+            # for mnli 
+            if args.task_name == "mnli":
+                raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation_matched')
+            else:
+                raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'validation')
     # for datasets from file.
     elif args.task_name in task_to_path:
         dataset_processor = task_to_path[args.task_name]["dataset_processor"]
@@ -246,7 +243,7 @@ def main():
     raw_datasets['validation'] = raw_eval_dataset
 
     if args.local_rank == 0:
-        logger.info('TRAIN / VALIDATION / TEST split.')
+        logger.info('TRAIN / VALIDATION split.')
         for split, dataset in raw_datasets.items():
             logger.info(f'{split} > {len(dataset)}')
     
@@ -257,8 +254,12 @@ def main():
     
     # Labels
     if args.task_name is not None and args.benchmark_name is not None:
-        # label_list : ['entailment', 'not_entailment']
-        label_list = raw_datasets["train"].features["label"].names
+        if args.benchmark_name == 'huggingface':
+            # TODO : fix?
+            label_list = raw_datasets["train"].features["label-coarse"].names
+        else:
+            # label_list : ['entailment', 'not_entailment']
+            label_list = raw_datasets["train"].features["label"].names
         num_labels = len(label_list)
     elif args.task_name in task_to_path:
         label_list = set(raw_datasets["train"]['label'])
@@ -345,36 +346,36 @@ def main():
 
         sample_num = len(texts[0])
         for sample_index in range(sample_num):
-            sentence1 = texts[0][sample_index]
-            if sentence2_key is not None:
-                sentence2 = texts[1][sample_index]
-            else:
-                sentence2 = ""
-            
-            prompted_setence = args.prefix + sentence1 + args.infix + sentence2 + args.postfix
-
-            prompted_setence = prepend_incontext_samples(
-                label2samples=label2samples,
-                full_train_samples=full_train_samples,
-                k=args.n_samples,
-                balance_sample=args.balance_sample,
-                input_sentence=prompted_setence
+            # Tokenize the texts
+            texts = (
+                (examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key])
             )
+            result = dict()
+            sample_num = len(texts[0])
+            result['sentence1'] = examples[sentence1_key]
+            input_sentences = []
 
-            prompted_setences.append(prompted_setence)
-
-        texts = (prompted_setences, )
-
-        result = tokenizer(*texts, padding=padding, max_length=args.max_length, truncation=True)
-
-        if "label" in examples:
-            if label_to_id is not None:
-                # Map labels to IDs (not necessary for GLUE tasks)
-                result["labels"] = [label_to_id[l] for l in examples["label"]]
+            # for single sentence tasks
+            if sentence2_key is None:
+                for sample_index in range(sample_num):
+                    input_sentence = args.prefix + texts[0][sample_index] + args.infix + args.postfix
+                    input_sentences.append(input_sentence)
             else:
-                # In all cases, rename the column to labels because the model will expect that.
+                result['sentence2'] = examples[sentence2_key]
+                for sample_index in range(sample_num):
+                    input_sentence = args.prefix + texts[0][sample_index] + args.infix + texts[1][sample_index] + args.postfix
+                    input_sentences.append(input_sentence)
+
+            result['input_sentence'] = input_sentences
+            
+            # Map labels to IDs (not necessary for GLUE tasks)
+            if "label" in examples:
                 result["labels"] = examples["label"]
-        return result
+            elif 'label-coarse' in examples:
+                result["labels"] = examples['label-coarse']
+            else:
+                raise NotImplementedError
+            return result
 
     if args.local_rank != 0:
         torch.distributed.barrier()
@@ -393,22 +394,15 @@ def main():
     if args.local_rank == 0:
         # Log a few random samples from the training set:
         for index in random.sample(range(len(train_dataset)), 1):
-            logger.info(f"Sample {index} of the training set: {train_dataset[index]}.")
-            logger.info(f'-> {tokenizer.decode(token_ids=train_dataset[index]["input_ids"], skip_special_tokens=True)}')
-    # DataLoaders creation:
-    if args.pad_to_max_length:
-        data_collator = default_data_collator
-    else:
-        data_collator = DataCollatorWithPadding(tokenizer)
-
-    train_sampler = DistributedSampler(train_dataset)
-    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, collate_fn=data_collator, batch_size=args.per_device_batch_size)
-    eval_sampler = DistributedSampler(eval_dataset)
-    eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, collate_fn=data_collator, batch_size=args.per_device_batch_size, shuffle=False)
-    
+            logger.info(f"Sample {index} of the training set:")
+            logger.info(f'{train_dataset[index]}')
+       
     # Get the metric function
     if args.task_name is not None and args.benchmark_name is not None:
-        metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
+        if args.benchmark_name == 'huggingface':
+            metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
+        else:
+            metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
     elif args.task_name is not None:
         metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
 
@@ -426,22 +420,47 @@ def main():
         logger.info(f"  Random Seed = {args.seed}")
         logger.info(f"  Inference Model = {args.model_name_or_path}")
          
+    
+    # for analysis
+    prediction_dict = {}
+
+    start_time = time.time()
     model_engine.eval()
-    for step, batch in tqdm(enumerate(eval_dataloader), disable=(args.local_rank != 0)):
-        with torch.no_grad():
-            batch = {k: v.cuda() for k, v in batch.items()}
-            loss, predictions = model_engine(**batch)
-            
-            metric.add_batch(
-                predictions=predictions,
-                references=batch["labels"],
+    for step, inputs in tqdm(enumerate(eval_dataset), disable=(args.local_rank != 0)):
+
+        if args.n_samples > 0:
+            inputs['input_sentence'] = prepend_incontext_samples(
+                label2samples=label2samples,
+                full_train_samples=full_train_samples,
+                k=args.n_samples,
+                balance_sample=args.balance_sample,
+                input_sentence=inputs['input_sentence']
             )
+
+        label = torch.tensor(inputs['labels']).to(model_engine.device).unsqueeze(dim=0)
+
+        prediction = model(**inputs)
+        print(f'label {label} <-> prediction {prediction}')
+            
+        metric.add_batch(
+            predictions=prediction,
+            references=label,
+        )
+
+        prediction = prediction.cpu().item()
+        prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
+
     eval_metric = metric.compute()
 
     if args.n_samples == 0:
         logger.info(f"{args.local_rank} -> Zero-shot evaluation result : {eval_metric}")
     else:
         logger.info(f"{args.local_rank} -> {args.n_samples}-shot evaluation result : {eval_metric}")
+
+    logger.info(f'Predictions distribution : {prediction_dict}')
+
+    end_time = time.time()
+    logger.info(f'Total time : {end_time - start_time} sec.')
                 
 if __name__ == "__main__":
     main()

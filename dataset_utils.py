@@ -81,11 +81,6 @@ def subj_generate_dataset_dict(filename):
     # same csv file format as SST-5
     return sst5_generate_dataset_dict(filename)
 
-# for TREC
-def trec_generate_dataset_dict(filename):
-    # same csv file format as SST-5
-    return sst5_generate_dataset_dict(filename)
-
 # for AG News
 def agnews_generate_dataset_dict(filename):
     sentence1_list = []
@@ -196,11 +191,6 @@ task_to_path = {
         "validation" : "/home/heyjoonkim/data/datasets/subj/test.csv",
         "dataset_processor" : subj_generate_dataset_dict,
     },
-    "trec" : {
-        "train" : "/home/heyjoonkim/data/datasets/trec/train.csv",
-        "validation" : "/home/heyjoonkim/data/datasets/trec/test.csv",
-        "dataset_processor" : trec_generate_dataset_dict,
-    },
     "agnews" : {
         "train" : "/home/heyjoonkim/data/datasets/agnews/train.csv",
         "validation" : "/home/heyjoonkim/data/datasets/agnews/test.csv",
@@ -238,7 +228,7 @@ task_to_keys = {
     "cr": ("sentence", None),
     "mpqa": ("sentence", None),
     "subj": ("sentence", None),
-    "trec": ("sentence", None),
+    "trec": ("text", None),
     "agnews": ("sentence1", "sentence2"),
     "yahoo": ("sentence1", "sentence2"),
     "yelp": ("sentence", None),
@@ -280,7 +270,20 @@ task_to_verbalizer = {
     "cr": None,
     "mpqa": None,
     "subj": None,
-    "trec": None,
+    "trec": {
+        # 'Description':0,
+        # 'Entity':1,
+        # 'Abbreviation':2, # or Expression
+        # 'Person':3, # or Human
+        # 'Number':4,
+        # 'Location':5,
+        'description':0,
+        'entity':1,
+        'expression':2,
+        'human':3,
+        'number':4,
+        'location':5,
+    },
     "agnews": {
         "World" : 0,
         "Sports" : 1,
@@ -331,7 +334,13 @@ def prepare_incontext_sampling(train_samples,
 
     for sample in train_samples:
         sentence1 = sample[sentence1_key]
-        label = sample['label']
+        if 'label' in sample:
+            label = sample['label']
+        elif 'label-coarse' in sample:
+            label = sample['label-coarse']
+        else:
+            raise NotImplementedError
+            
         label_token = label2token[label]
         if sentence2_key is not None:
             sentence2 = sample[sentence2_key]
@@ -362,14 +371,24 @@ def prepend_incontext_samples(
 
     final_sentence = None
     sep = '\n\n\n'
+    # sep = '\n\n\n\n'
 
     if balance_sample:
         total_count = 0
+        labels = list(label2samples.keys())
+        random.shuffle(labels)
         while True:
-            for label, samples in label2samples.items():
+            for label in labels:
+                samples = label2samples[label]
                 total_length = len(samples)
-                random_index = random.randint(0, total_length-1)
-                selected_sample = samples[random_index]
+                while True:
+                    random_index = random.randint(0, total_length-1)
+                    selected_sample = samples[random_index]
+                    # we don't want to use duplicate in-context samples
+                    if final_sentence is None:
+                        break
+                    if selected_sample not in final_sentence:
+                        break
 
                 if final_sentence is None:
                     final_sentence = selected_sample

@@ -62,7 +62,8 @@ def main():
 
     if args.task_name is not None and args.task_name not in task_to_path:
         # Downloading and loading a dataset from the hub.
-        datasets = load_dataset("glue", args.task_name)
+        # datasets = load_dataset("glue", args.task_name)
+        datasets = load_dataset(args.task_name)
     else:
         datasets = DatasetDict()
         dataset_processor = task_to_path[args.task_name]["dataset_processor"]
@@ -110,6 +111,9 @@ def main():
         # Map labels to IDs (not necessary for GLUE tasks)
         if "label" in examples:
             result["labels"] = examples["label"]
+        elif 'label-coarse' in examples:
+            result['labels'] = examples['label-coarse']
+
         return result
 
     processed_datasets = datasets.map(
@@ -123,14 +127,16 @@ def main():
         raise ValueError("--do_train requires a train dataset")
     train_dataset = processed_datasets["train"]
 
-    if "validation" not in processed_datasets and "validation_matched" not in processed_datasets:
-        raise ValueError("--do_eval requires a validation dataset")
     if args.task_name == "mnli":
         eval_dataset = processed_datasets["validation_mismatched"]
         eval_dataset_mm = processed_datasets["validation_matched"]
     else:
-        eval_dataset = processed_datasets["validation"]
-
+        if 'validation' in processed_datasets:
+            eval_dataset = processed_datasets["validation"]
+        elif 'test' in processed_datasets:
+            eval_dataset = processed_datasets["test"]
+        
+    
     logger.info(f'# TRAIN dataset : {len(train_dataset)}')
     logger.info(f'# Eval  dataset : {len(eval_dataset)}')
 
@@ -145,7 +151,12 @@ def main():
     if sentence2_key is not None:
         total_sentence2_length = 0
 
-    for index, inputs in tqdm(enumerate(eval_dataset)):
+    label2count = {}
+
+    dataset = train_dataset
+    # dataset = eval_dataset
+
+    for index, inputs in tqdm(enumerate(dataset)):
 
         labels = inputs['labels']
         input_sentence = inputs['input_sentence']
@@ -168,14 +179,17 @@ def main():
             input_sentence2_token_length = len(tokenizer(sentence2)['input_ids'])
             total_sentence2_length += input_sentence2_token_length
 
+        label2count[labels] = label2count.get(labels, 0) + 1 
+
         
-    average_input_sentence_token_length = total_input_sentence_length / len(eval_dataset)
+    average_input_sentence_token_length = total_input_sentence_length / len(dataset)
     logger.info(f'Average input token length : {average_input_sentence_token_length}')
-    average_sentence1_token_length = total_sentence1_length / len(eval_dataset)
+    average_sentence1_token_length = total_sentence1_length / len(dataset)
     logger.info(f'Average sentence1 token length : {average_sentence1_token_length}')
     if sentence2_key is not None:
-        average_sentence2_token_length = total_sentence2_length / len(eval_dataset)
+        average_sentence2_token_length = total_sentence2_length / len(dataset)
         logger.info(f'Average sentence2 token length : {average_sentence2_token_length}')
+    logger.info(f'label split : {label2count}')
 
     end_time = time.time()
     logger.info(f'Total time : {end_time - start_time}')
