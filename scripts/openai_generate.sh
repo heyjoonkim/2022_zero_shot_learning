@@ -2,7 +2,7 @@
 output_dir="./outputs"
 dataset_dir="./generated_datasets"
 task="rte"
-model="davinci"
+model="gpt2-xl"
 time=`date +%Y-%m-%d-%T`
 
 max_length="30"

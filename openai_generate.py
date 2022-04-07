@@ -249,7 +249,6 @@ def main():
                 row.append(generated_sentence)
 
             tsv_writer.writerow(row)
-        
     end_time = time.time()
     logger.info(f'Total time : {end_time - start_time}')
 

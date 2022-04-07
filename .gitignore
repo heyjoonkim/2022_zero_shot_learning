@@ -1,4 +1,6 @@
 outputs/*
+data
+
 # scripts/*
 generated_datasets/*
 tmp/*

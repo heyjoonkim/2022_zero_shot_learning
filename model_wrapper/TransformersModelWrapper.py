@@ -119,8 +119,6 @@ class GPT2Wrapper(torch.nn.Module):
 
         return ids_list
 
-
-
     def forward(
         self,
         input_ids=None,

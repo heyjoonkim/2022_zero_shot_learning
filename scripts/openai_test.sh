@@ -1,7 +1,9 @@
 
 output_dir="./outputs"
-task="rte"
-model="davinci"
+task="sst2"
+# model="EleutherAI/gpt-neo-2.7B"
+model="EleutherAI/gpt-j-6B"
+# model="davinci"
 time=`date +%Y-%m-%d-%T`
 
 
@@ -11,9 +13,9 @@ python openai_main.py \
     --model_name_or_path $model \
     --overwrite_output_dir \
     --seed 1234 \
-    --n_samples 8 \
-    --infix '\nQuestion : ' \
-    --postfix " True or False? \n Answer : "
+    --prefix "Review: " \
+    --postfix "
+Sentiment: "
 
 
 

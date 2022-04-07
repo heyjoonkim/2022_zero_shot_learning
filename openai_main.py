@@ -64,6 +64,12 @@ def parse_args():
         help='Overwrite output directory.'
     )
     parser.add_argument(
+        '--log_results', 
+        default=False, 
+        action="store_true",
+        help='Log prediction results to tsv file'
+    )
+    parser.add_argument(
         "--seed", 
         type=int, 
         default=None, 
@@ -75,6 +81,12 @@ def parse_args():
         type=int, 
         default=0, 
         help="Number of samples for in-context learning."
+    )
+    parser.add_argument(
+        "--demo_accuracy", 
+        type=float, 
+        default=1, 
+        help="Accuracy of demonstration samples for in-context learning."
     )
     # for manual prompt #
     parser.add_argument(
@@ -103,10 +115,7 @@ def parse_args():
     
 
 def main():
-
-
     args = parse_args()
-
 
     # Setup logging
     logging.basicConfig(
@@ -128,7 +137,6 @@ def main():
     file_handler = logging.FileHandler(logging_output_file)
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
-
 
     args.verbalizer = task_to_verbalizer.get(args.task_name)
 
@@ -169,10 +177,15 @@ def main():
         sample_num = len(texts[0])
         result['sentence1'] = examples[sentence1_key]
 
-        # for single sentence tasks
+
         if sentence2_key is None:
-            pass
+            # for single sentence tasks
+            input_sentences = []
+            for sample_index in range(sample_num):
+                input_sentence = args.prefix + texts[0][sample_index] + args.postfix
+                input_sentences.append(input_sentence)
         else:
+            # for two sentence tasks
             result['sentence2'] = examples[sentence2_key]
             input_sentences = []
 
@@ -206,9 +219,13 @@ def main():
     else:
         eval_dataset = processed_datasets["validation"]
 
+
     logger.info(f'# TRAIN dataset : {len(train_dataset)}')
     logger.info(f'# Eval  dataset : {len(eval_dataset)}')
-    # TODO : fix?
+
+    for index in random.sample(range(len(train_dataset)), 1):
+        logger.info(f"Sample {index} of the training set: {train_dataset[index]['input_sentence']}")
+
     # for random sampling #
     train_dataset_length = len(train_dataset)
     ## DONE LOADING DATASET ##
@@ -217,47 +234,44 @@ def main():
 
     start_time = time.time()
 
-    result_writer = os.path.join(args.output_dir, "wrong_samples.tsv")
-    with open(result_writer, "w") as file_writer:
+    if args.log_results:
+        result_writer = os.path.join(args.output_dir, "results.tsv")
+        file_writer = open(result_writer, "w")
         tsv_writer = csv.writer(file_writer, delimiter='\t')
-        tsv_writer.writerow([args.prefix, args.infix, args.postfix])
-        tsv_writer.writerow(['index', 'sentence1', 'sentence2', 'prediction', 'label', 'top_logprobs'])
-        for index, inputs in tqdm(enumerate(eval_dataset)):
-
-            ## select 
-            if args.n_samples > 0:
-                in_context_samples = []
-                for _ in range(args.n_samples):
-                    random_index = random.randint(0, train_dataset_length-1)
-                    random_sample = train_dataset[random_index]
-                    random_sample_input_sentence = random_sample['input_sentence']
+        tsv_writer.writerow(['index', 'prediction', 'label', 'top_logprobs'])
+    for index, inputs in tqdm(enumerate(eval_dataset)):
+        ## select 
+        if args.n_samples > 0:
+            in_context_samples = []
+            for _ in range(args.n_samples):
+                random_index = random.randint(0, train_dataset_length-1)
+                random_sample = train_dataset[random_index]
+                random_sample_input_sentence = random_sample['input_sentence']
+                # A% demo accuracy
+                if np.random.rand(1)[0] <= args.demo_accuracy:
                     random_sample_label = random_sample['labels']
-                    for k,v in args.verbalizer.items():
-                        if random_sample_label == v:
-                            random_sample_input_sentence = random_sample_input_sentence + k
-                            break
-                    in_context_samples.append(random_sample_input_sentence)
-                in_context_samples = ' '.join(in_context_samples)
-                inputs['input_sentence'] = ' '.join([in_context_samples, inputs['input_sentence']])
+                else:
+                    labels = list(args.verbalizer.values())
+                    labels.remove(random_sample['labels'])
+                    random_sample_label = random.choice(labels)
+                for k,v in args.verbalizer.items():
+                    if random_sample_label == v:
+                        random_sample_input_sentence = random_sample_input_sentence + k
+                        break
+                in_context_samples.append(random_sample_input_sentence)
+            in_context_samples = '\n\n\n'.join(in_context_samples)
+            inputs['input_sentence'] = '\n\n\n'.join([in_context_samples, inputs['input_sentence']])
 
-            label = inputs['labels']
-            prediction, results_dict = model.forward(**inputs)
+        label = inputs['labels']
+        prediction, results_dict = model.forward(**inputs)
 
+        if prediction == label:
+            correct_count += 1
+        if args.log_results:
+            tsv_writer.writerow([index, prediction, label, str(results_dict)])
 
-            if prediction == label:
-                correct_count += 1
-            else:
-                tsv_writer.writerow([index, inputs['sentence1'], inputs['sentence2'], prediction, label, str(results_dict)])
-
-            # TODO : removes
-            # if index > 20:
-            #     break
-            
-        result = correct_count / len(eval_dataset) * 100
-        logger.info(f'Result : {correct_count} / {len(eval_dataset)} = {result}%')
-
-        tsv_writer.writerow([correct_count, len(eval_dataset), result])
-
+    result = correct_count / len(eval_dataset) * 100
+    logger.info(f'Result : {correct_count} / {len(eval_dataset)} = {result}%')
         
     end_time = time.time()
     logger.info(f'Total time : {end_time - start_time}')
