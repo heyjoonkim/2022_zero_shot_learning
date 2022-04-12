@@ -207,15 +207,14 @@ def main():
 
     if "train" not in processed_datasets:
         raise ValueError("requires a train dataset")
-
     train_dataset = processed_datasets["train"]
-    train_dataset = train_dataset.filter(lambda example: example['labels'] in args.verbalizer.values())
+
     # if "validation" not in processed_datasets and "validation_matched" not in processed_datasets:
     #     raise ValueError("requires a validation dataset")
     if args.task_name == "mnli":
         eval_dataset = processed_datasets["validation_matched"]
         eval_dataset_mm = processed_datasets["validation_mismatched"]
-    elif args.task_name == "trec" or args.task_name == "ag_news" or args.task_name == "poem_sentiment":
+    elif args.task_name == "trec":
         eval_dataset = processed_datasets["test"]
     else:
         eval_dataset = processed_datasets["validation"]
@@ -240,29 +239,27 @@ def main():
         file_writer = open(result_writer, "w")
         tsv_writer = csv.writer(file_writer, delimiter='\t')
         tsv_writer.writerow(['index', 'prediction', 'label', 'top_logprobs'])
-    if args.n_samples > 0:
-        in_context_samples = []
-        for _ in range(args.n_samples):
-            random_index = random.randint(0, train_dataset_length-1)
-            random_sample = train_dataset[random_index]
-            random_sample_input_sentence = random_sample['input_sentence']
-            # A% demo accuracy
-            if np.random.rand(1)[0] <= args.demo_accuracy:
-                random_sample_label = random_sample['labels']
-            else:
-                labels = list(args.verbalizer.values())
-                labels.remove(random_sample['labels'])
-                random_sample_label = random.choice(labels)
-            for k,v in args.verbalizer.items():
-                if random_sample_label == v:
-                    random_sample_input_sentence = random_sample_input_sentence + k
-                    break
-            in_context_samples.append(random_sample_input_sentence)
-        in_context_samples = '\n\n\n'.join(in_context_samples)
-        logger.info(f'in context samples\n{in_context_samples}')
     for index, inputs in tqdm(enumerate(eval_dataset)):
         ## select 
         if args.n_samples > 0:
+            in_context_samples = []
+            for _ in range(args.n_samples):
+                random_index = random.randint(0, train_dataset_length-1)
+                random_sample = train_dataset[random_index]
+                random_sample_input_sentence = random_sample['input_sentence']
+                # A% demo accuracy
+                if np.random.rand(1)[0] <= args.demo_accuracy:
+                    random_sample_label = random_sample['labels']
+                else:
+                    labels = list(args.verbalizer.values())
+                    labels.remove(random_sample['labels'])
+                    random_sample_label = random.choice(labels)
+                for k,v in args.verbalizer.items():
+                    if random_sample_label == v:
+                        random_sample_input_sentence = random_sample_input_sentence + k
+                        break
+                in_context_samples.append(random_sample_input_sentence)
+            in_context_samples = '\n\n\n'.join(in_context_samples)
             inputs['input_sentence'] = '\n\n\n'.join([in_context_samples, inputs['input_sentence']])
 
         label = inputs['labels']

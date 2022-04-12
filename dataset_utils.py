@@ -218,6 +218,8 @@ task_to_path = {
     },
 }
 
+GLUE = ["cola", "mnli", "mrpc", "qnli", "qqp", "rte", "sst2", "stsb", "wnli"]
+
 task_to_keys = {
     # GLUE
     "cola": ("sentence", None),
@@ -238,31 +240,44 @@ task_to_keys = {
     "cr": ("sentence", None),
     "mpqa": ("sentence", None),
     "subj": ("sentence", None),
-    "trec": ("sentence", None),
-    "agnews": ("sentence1", "sentence2"),
+    "trec": ("text", None),
+    "ag_news": ("text", None),
     "yahoo": ("sentence1", "sentence2"),
     "yelp": ("sentence", None),
+    "poem_sentiment": ("verse_text", None)
+}
+task_to_label = {
+    "trec": "label-coarse",
 }
 
 task_to_verbalizer = {
     "cola": None,
-    "mnli": None,
-    "mrpc": None,
+    "mnli": {
+        " Maybe" : 1, # neutral
+        " Yes" : 0,  # entailment
+        " No" : 2    # not entailment
+    },
+    "mrpc": {
+        " True" : 1, # neutral
+        " False" : 0,  # entailment
+        # "equivalent" : 1, # neutral
+        # "not_equivalent" : 0,  # entailment
+    },
     "qnli": None,
     "qqp": None,
     "rte": {
         # " positive" : 0,  # entailment
         # " negative" : 1    # not entailment
-        # "entailment" : 0,  # entailment
-        # "not entailment" : 1    # not entailment
+        "entailment" : 0,  # entailment
+        "not_entailment" : 1    # not entailment
         # " Yes" : 0,  # entailment
         # " No" : 1    # not entailment
-        "True" : 0,  # entailment
-        "False" : 1    # not entailment
+        # " True" : 0,  # entailment
+        # " False" : 1    # not entailment
     },
     "sst2": {
-        "negative" : 0,
-        "positive" : 1,
+        " negative" : 0,
+        " positive" : 1,
         # "bad" : 0,
         # "good" : 1,
         # "terrible" : 0,
@@ -280,12 +295,19 @@ task_to_verbalizer = {
     "cr": None,
     "mpqa": None,
     "subj": None,
-    "trec": None,
-    "agnews": {
-        "World" : 0,
-        "Sports" : 1,
-        "Business" : 2,
-        "Tech" : 3,
+    "trec": {
+        " description" : 0,
+        " entity" : 1,
+        " expression" : 2,
+        " human" : 3,
+        " number": 4,
+        " location": 5
+    },
+    "ag_news": {
+        "world" : 0,
+        "sports" : 1,
+        "business" : 2,
+        "technology" : 3,
     },
     "yahoo" : {
         " Society" : 0,
@@ -312,6 +334,11 @@ task_to_verbalizer = {
         ' okay' : 2,
         ' good' : 3,
         ' great' : 4,
+    },
+    "poem_sentiment": {
+        'negative': 0,
+        'positive': 1,
+        'no_impact': 2
     }
 }
 

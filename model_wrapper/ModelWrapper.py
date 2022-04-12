@@ -49,7 +49,7 @@ class ModelWrapper:
         predicted_label = None
         results_dict = dict()
 
-        for label_token,label in self.verbalizer.items():
+        for label_token, label in self.verbalizer.items():
             input_sentence_with_label = input_sentence + label_token
             # print(input_sentence_with_label)
 

@@ -46,11 +46,8 @@ def completion():
     # TODO: implement n!
     n = params['n']
 
-    torch.cuda.empty_cache()
-
     if temperature == 0:
         temperature = 0.01
-
 
     sm = LogSoftmax(dim=1)
     inputs = tokenizer(prompt, truncation=True, max_length=1024, return_tensors="pt").to(device)
