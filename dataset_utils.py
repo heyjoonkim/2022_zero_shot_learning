@@ -244,7 +244,8 @@ task_to_keys = {
     "ag_news": ("text", None),
     "yahoo": ("sentence1", "sentence2"),
     "yelp": ("sentence", None),
-    "poem_sentiment": ("verse_text", None)
+    "poem_sentiment": ("verse_text", None),
+    "hate": ("text", None)
 }
 task_to_label = {
     "trec": "label-coarse",
@@ -290,7 +291,16 @@ task_to_verbalizer = {
         "Neither" : 2,
     },
     "stsb": None,
-    "wnli": None,
+    "wnli": {
+        # " positive" : 0,  # entailment
+        # " negative" : 1    # not entailment
+        # "entailment" : 0,  # entailment
+        # "not_entailment" : 1    # not entailment
+        # " Yes" : 0,  # entailment
+        # " No" : 1    # not entailment
+        "True" : 0,  # entailment
+        "False" : 1    # not entailment
+    },
     "mr": None,
     "cr": None,
     "mpqa": None,
@@ -339,6 +349,10 @@ task_to_verbalizer = {
         'negative': 0,
         'positive': 1,
         'no_impact': 2
+    },
+    "hate": {
+        'non_hate': 0,
+        'hate': 1
     }
 }
 

@@ -149,6 +149,8 @@ def main():
     if args.task_name is not None and args.task_name in GLUE:
         # Downloading and loading a dataset from the hub.
         datasets = load_dataset("glue", args.task_name)
+    elif args.task_name is not None and args.task_name == 'hate':
+        datasets = load_dataset("tweet_eval", args.task_name)
     else:
         datasets = load_dataset(args.task_name)
 
@@ -242,8 +244,10 @@ def main():
         tsv_writer.writerow(['index', 'prediction', 'label', 'top_logprobs'])
     if args.n_samples > 0:
         in_context_samples = []
+        random_indices = []
         for _ in range(args.n_samples):
-            random_index = random.randint(0, train_dataset_length-1)
+            random_indices.append(random.randint(0, train_dataset_length-1))
+        for random_index in random_indices:
             random_sample = train_dataset[random_index]
             random_sample_input_sentence = random_sample['input_sentence']
             # A% demo accuracy
