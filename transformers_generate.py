@@ -5,9 +5,10 @@ import os
 import random
 import json
 import time
+import csv
 
 import datasets
-from datasets import load_dataset, load_metric, DatasetDict, Dataset
+from datasets import load_dataset, DatasetDict, Dataset
 from tqdm.auto import tqdm
 
 import transformers
@@ -15,15 +16,14 @@ from transformers.deepspeed import HfDeepSpeedConfig
 from transformers import (
     AutoConfig,
     AutoTokenizer,
-    PretrainedConfig,
+    AutoModelForCausalLM,
     set_seed,
 )
 import torch
 import deepspeed
 
-from model_wrapper.TransformersModelWrapper import GPT2Wrapper
 from utils import save_config
-from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer, prepare_incontext_sampling, prepend_incontext_samples
+from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer
 
 logger = logging.getLogger(__name__)
 
@@ -54,20 +54,6 @@ def parse_args():
         type=str, 
         default=None, 
         help="A csv or a json file containing the validation data."
-    )
-    parser.add_argument(
-        "--max_length",
-        type=int,
-        default=1024,
-        help=(
-            "The maximum total input sequence length after tokenization. Sequences longer than this will be truncated,"
-            " sequences shorter will be padded if `--pad_to_max_lengh` is passed."
-        ),
-    )
-    parser.add_argument(
-        "--pad_to_max_length",
-        action="store_true",
-        help="If passed, pad all samples to `max_length`. Otherwise, dynamic padding is used.",
     )
     parser.add_argument(
         "--model_name_or_path",
@@ -113,13 +99,7 @@ def parse_args():
         default=0, 
         help="Number of samples for in-context learning."
     )
-    parser.add_argument(
-        '--balance_sample', 
-        default=False, 
-        action="store_true",
-        help='Balance samples per label for in-context learning.'
-    )
-    # for manual prompt #
+    # manual prompts for generation #
     parser.add_argument(
         "--prefix",
         type=str,
@@ -138,13 +118,47 @@ def parse_args():
         default='',
         help="Postfix prompt.",
     )
-    # until here #
     parser.add_argument(
-        '--explicit_label_space', 
-        default=False, 
-        action="store_true",
-        help='Explicitly show label space.'
+        "--label_token", 
+        type=str, 
+        default="[LABEL]", 
+        help="Where to store the final model."
     )
+    parser.add_argument(
+        "--input_label_token", 
+        type=str, 
+        default="[INPUT_LABEL]", 
+        help="The place of the label for the input sentence."
+    )
+    # until here #
+
+    # hyperparams for generation #
+    parser.add_argument(
+        "--generation_max_length", 
+        type=int, 
+        default=10, 
+        help="Max length for generation."
+    )
+    parser.add_argument(
+        '--generation_min_length', 
+        default=10, 
+        type=int, 
+        help='Min length for generation.'
+    )
+    parser.add_argument(
+        "--no_repeat_ngram_size", 
+        type=int, 
+        default=2, 
+        help="no_repeat_ngram_size."
+    )
+    parser.add_argument(
+        "--temperature", 
+        type=float, 
+        default=0.5, 
+        help="Temperature for sampling."
+    )
+    # until here #
+
 
     args = parser.parse_args()
     
@@ -198,6 +212,7 @@ def main():
     logger.addHandler(file_handler)
 
     args.verbalizer = task_to_verbalizer.get(args.task_name)
+    args.label2token = {v:k for k,v in args.verbalizer.items()}
 
     if args.local_rank == 0:
         datasets.utils.logging.set_verbosity_warning()
@@ -220,11 +235,8 @@ def main():
     raw_datasets = DatasetDict()
     if args.task_name is not None and args.benchmark_name is not None:
         if args.benchmark_name == 'huggingface':
-            raw_train_dataset = load_dataset(args.task_name, split='train')
             raw_eval_dataset = load_dataset(args.task_name, split='test')
         else:
-            # Downloading and loading a dataset from the hub.
-            raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
             # for mnli 
             if args.task_name == "mnli":
                 raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation_matched')
@@ -233,19 +245,13 @@ def main():
     # for datasets from file.
     elif args.task_name in task_to_path:
         dataset_processor = task_to_path[args.task_name]["dataset_processor"]
-        train_file_path = task_to_path[args.task_name]["train"]
         validation_file_path = task_to_path[args.task_name]["validation"]
-
-        # train set
-        train_dict = dataset_processor(train_file_path)
-        raw_train_dataset = Dataset.from_dict(train_dict)
         # validation set
         validation_dict = dataset_processor(validation_file_path)
         raw_eval_dataset = Dataset.from_dict(validation_dict)
     else:
         raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
 
-    raw_datasets['train'] = raw_train_dataset
     raw_datasets['validation'] = raw_eval_dataset
 
     if args.local_rank == 0:
@@ -255,20 +261,20 @@ def main():
     
     if args.local_rank == 0:
         # Log a few random samples from the training set:
-        for index in random.sample(range(len(raw_train_dataset)), 1):
-            logger.info(f"Sample {index} of the training set: {raw_train_dataset[index]}.")
+        for index in random.sample(range(len(raw_eval_dataset)), 1):
+            logger.info(f"Sample {index} of the training set: {raw_eval_dataset[index]}.")
     
     # Labels
     if args.task_name is not None and args.benchmark_name is not None:
         if args.benchmark_name == 'huggingface':
             # TODO : fix?
-            label_list = raw_datasets["train"].features["label-coarse"].names
+            label_list = raw_datasets["validation"].features["label-coarse"].names
         else:
             # label_list : ['entailment', 'not_entailment']
-            label_list = raw_datasets["train"].features["label"].names
+            label_list = raw_datasets["validation"].features["label"].names
         num_labels = len(label_list)
     elif args.task_name in task_to_path:
-        label_list = set(raw_datasets["train"]['label'])
+        label_list = set(raw_datasets["validation"]['label'])
         num_labels = len(label_list)
     else:
         raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
@@ -287,28 +293,15 @@ def main():
         pad_token_id=tokenizer.unk_token_id
     )
 
-    model_loading_start = time.time()
     # TODO : fix?
     if args.is_zero3:
         with deepspeed.zero.Init(config_dict_or_path=args.ds_config):
-            model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer)
+            model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path)
     else:
-        model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer)
-
-    model_loading_end = time.time()
-    logger.info(f'Total time for loading model : {model_loading_end - model_loading_start}')
+        model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path)
 
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
-
-    label2samples, full_train_samples = prepare_incontext_sampling(
-        train_samples=raw_datasets['train'],
-        verbalizer=args.verbalizer,
-        sentence1_key=sentence1_key,
-        sentence2_key=sentence2_key,
-        prefix=args.prefix,
-        infix=args.infix,
-        postfix=args.postfix)
 
     def preprocess_function(examples):
         # Tokenize the texts
@@ -325,21 +318,11 @@ def main():
             result = dict()
             sample_num = len(texts[0])
             result['sentence1'] = examples[sentence1_key]
-            input_sentences = []
 
             # for single sentence tasks
-            if sentence2_key is None:
-                for sample_index in range(sample_num):
-                    input_sentence = args.prefix + texts[0][sample_index] + args.infix + args.postfix
-                    input_sentences.append(input_sentence)
-            else:
+            if sentence2_key is not None:
                 result['sentence2'] = examples[sentence2_key]
-                for sample_index in range(sample_num):
-                    input_sentence = args.prefix + texts[0][sample_index] + args.infix + texts[1][sample_index] + args.postfix
-                    input_sentences.append(input_sentence)
-
-            result['input_sentence'] = input_sentences
-            
+                            
             # Map labels to IDs (not necessary for GLUE tasks)
             if "label" in examples:
                 result["labels"] = examples["label"]
@@ -354,91 +337,98 @@ def main():
     processed_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
-        remove_columns=raw_datasets["train"].column_names,
+        remove_columns=raw_datasets["validation"].column_names,
         desc="Running tokenizer on dataset",
     )
     if args.local_rank == 0:
         torch.distributed.barrier()
 
-    train_dataset = processed_datasets["train"]
     eval_dataset = processed_datasets["validation"]
 
     if args.local_rank == 0:
         # Log a few random samples from the training set:
-        for index in random.sample(range(len(train_dataset)), 1):
-            logger.info(f"Sample {index} of the training set:")
-            logger.info(f'{train_dataset[index]}')
-       
-    # Get the metric function
-    if args.task_name is not None and args.benchmark_name is not None:
-        if args.benchmark_name == 'huggingface':
-            metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
-        else:
-            metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
-    elif args.task_name is not None:
-        metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
+        for index in random.sample(range(len(eval_dataset)), 1):
+            logger.info(f"Sample {index} of the evaluation set:")
+            logger.info(f'{eval_dataset[index]}')
+    
 
     model_engine, _, _, _ = deepspeed.initialize(model=model, optimizer=None, lr_scheduler=None, config_params=args.ds_config)
     
-    # Evaluate! 
+    # Generate! 
     if args.local_rank == 0:
         logger.info("***** Zero/Few-shot Evaluation *****")
-        logger.info(f"  Num TRAIN examples = {len(train_dataset)}")
         logger.info(f"  Num EVAL  examples = {len(eval_dataset)}")
-        logger.info(f"  Instantaneous batch size per device = {args.per_device_batch_size}")
-        logger.info(f"  World Size = {args.world_size}")
         logger.info(f"  Random Seed = {args.seed}")
-        logger.info(f"  K = {args.n_samples}")
         logger.info(f"  Inference Model = {args.model_name_or_path}")
          
     
-    # for analysis
-    prediction_dict = {}
+    # ignore generating comma(,) and new_line(\n)
+    ignored_sequences = [',', ' ,', ' \n', '\n', ' \t', '\t']
+    # bad_words_ids = tokenizer(ignored_sequences, add_prefix_space=True).input_ids
+    # bad_words_ids = [ tokenizer.encode(ignored_sequence, add_prefix_space=True) for ignored_sequence in ignored_sequences]
+    bad_words_ids = [ tokenizer.encode(ignored_sequence) for ignored_sequence in ignored_sequences]
+    logger.info(f"  Ignored sequences : {ignored_sequences} -> {bad_words_ids}")
 
     start_time = time.time()
     model_engine.eval()
 
-    incontext_samples, sep = prepend_incontext_samples(
-        label2samples=label2samples,
-        full_train_samples=full_train_samples,
-        k=args.n_samples,
-        balance_sample=args.balance_sample,
-    )
+    generation_writer = os.path.join(args.output_dir, "test.tsv")
+    with open(generation_writer, 'w') as file_writer:
+        tsv_writer = csv.writer(file_writer, delimiter='\t')
+        for step, inputs in tqdm(enumerate(eval_dataset), disable=(args.local_rank != 0)):
 
-    if args.explicit_label_space:
-        labels = list(args.verbalizer.keys())
-        labels = ' '.join(labels)
-        label_space = 'Types:' + labels
-        incontext_samples = label_space + sep + incontext_samples
+            sentence1 = inputs['sentence1']
+            sentence2 = inputs['sentence2'] if 'sentence2' in inputs else ''
+            label = inputs['labels']
+            input_label_token = args.label2token[label]
 
-    logger.info(f'=== in-context samples ===\n{incontext_samples}\n=====================')
-        
-    for step, inputs in tqdm(enumerate(eval_dataset), disable=(args.local_rank != 0)):
+            original_input = args.prefix + sentence1 + args.infix + sentence2 + args.postfix
+            if args.input_label_token in original_input:
+                original_input = original_input.replace(args.input_label_token, input_label_token)
+            # print('original_input', original_input)
 
-        if args.n_samples > 0:
-            inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
+
+            row = [step, label, sentence1]
+
+            if 'sentence2' in inputs:
+                row.append(sentence2)
             
-        label = torch.tensor(inputs['labels']).to(model_engine.device).unsqueeze(dim=0)
+            for index, (label_token, label) in enumerate(args.verbalizer.items()):
+                assert index == label, f'index {index} != label {label}'
+                label_dependent_input = original_input.replace(args.label_token, label_token)
+                # print('label_dependent_input', label_dependent_input)
+                # print(len(label_dependent_input))
+                l = len(label_dependent_input)
 
-        prediction = model(**inputs)
+                tokenized_inputs = tokenizer(label_dependent_input, return_tensors='pt').to(model_engine.device)
+                # shape : (1, input_length) -> (input_length, )
+                input_ids = tokenized_inputs['input_ids'].squeeze(dim=0)
+                input_length = len(input_ids)
+
+                generated_ids = model_engine.module.generate(
+                    **tokenized_inputs,
+                    do_sample=True,
+                    max_length=input_length+args.generation_max_length,
+                    min_length=input_length+args.generation_min_length,
+                    temperature=args.temperature,
+                    no_repeat_ngram_size=args.no_repeat_ngram_size,
+                    num_return_sequences=args.n_samples,
+                    early_stopping=True,
+                    bad_words_ids=bad_words_ids
+                )
+
+                # list of length n_samples
+                generated_outputs = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+
+                
+                generated_outputs = [genenerated_output[l:].replace('\n', '').strip() for genenerated_output in generated_outputs]
+
+                # for generated_output in generated_outputs:
+                #     print(generated_output)
+                
+                row.append(generated_outputs)
             
-        metric.add_batch(
-            predictions=prediction,
-            references=label,
-        )
-
-        prediction = prediction.cpu().item()
-        prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
-
-    eval_metric = metric.compute()
-
-    
-    if args.n_samples == 0:
-        logger.info(f"** Zero-shot evaluation result : {eval_metric}")
-    else:
-        logger.info(f"** {args.n_samples}-shot evaluation result : {eval_metric}")
-
-    logger.info(f'Predictions distribution : {prediction_dict}')
+            tsv_writer.writerow(row)
 
     end_time = time.time()
     logger.info(f'Total time : {end_time - start_time} sec.')

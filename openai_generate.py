@@ -1,21 +1,3 @@
-#!/usr/bin/env python
-# coding=utf-8
-# Copyright 2020 The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-""" Finetuning the library models for sequence classification on GLUE."""
-# You can also adapt this script on your own text classification task. Pointers for this are left as comments.
-
 import argparse
 import logging
 import os
@@ -26,7 +8,7 @@ import random
 
 import numpy as np
 from tqdm.auto import tqdm
-from datasets import load_dataset
+from datasets import load_dataset, DatasetDict, Dataset
 
 from transformers import set_seed
 
@@ -46,6 +28,13 @@ def parse_args():
         choices=list(task_to_keys.keys()),
     )
     parser.add_argument(
+        "--benchmark_name",
+        type=str,
+        default=None,
+        help="The name of the benchmark to train on.",
+        choices=['glue', 'super_glue', 'huggingface'],
+    )
+    parser.add_argument(
         "--model_name_or_path",
         type=str,
         help="Path to pretrained model or model identifier from huggingface.co/models.",
@@ -53,12 +42,6 @@ def parse_args():
     )
     parser.add_argument(
         "--output_dir", 
-        type=str, 
-        default=None, 
-        help="Where to store the final model."
-    )
-    parser.add_argument(
-        "--dataset_dir", 
         type=str, 
         default=None, 
         help="Where to store the final model."
@@ -78,7 +61,7 @@ def parse_args():
     parser.add_argument(
         "--max_length", 
         type=int, 
-        default=30, 
+        default=15, 
         help="Max length for generation."
     )
     parser.add_argument(
@@ -100,25 +83,36 @@ def parse_args():
         help="Top-p sampling."
     )
     
-    
     # for manual prompt #
     parser.add_argument(
-        "--positive_prompt",
+        "--prefix",
         type=str,
-        default=None,
-        help="Prompt for generating positive in-context sample.",
+        default='',
+        help="Prefix prompt.",
     )
     parser.add_argument(
-        "--negative_prompt",
+        "--infix",
         type=str,
-        default=None,
-        help="Prompt for generating negative in-context sample.",
+        default='',
+        help="Infix prompt.",
     )
     parser.add_argument(
-        "--neutral_prompt",
+        "--postfix",
         type=str,
-        default=None,
-        help="Prompt for generating neutral in-context sample.",
+        default='',
+        help="Postfix prompt.",
+    )
+    parser.add_argument(
+        "--label_token", 
+        type=str, 
+        default="[LABEL]", 
+        help="Where to store the final model."
+    )
+    parser.add_argument(
+        "--input_label_token", 
+        type=str, 
+        default="[INPUT_LABEL]", 
+        help="The place of the label for the input sentence."
     )
     # until here #
 
@@ -128,10 +122,7 @@ def parse_args():
     
 
 def main():
-
-
     args = parse_args()
-
 
     # Setup logging
     logging.basicConfig(
@@ -148,14 +139,6 @@ def main():
             if not args.overwrite_output_dir:
                 raise NotADirectoryError(f'Output directory {args.output_dir} exits. Exit program. (overwrite_output_dir=False)')
 
-    if args.dataset_dir is not None:
-        if not os.path.isdir(args.dataset_dir):
-            os.makedirs(args.dataset_dir, exist_ok=True)
-        else:
-            if not args.dataset_dir:
-                raise NotADirectoryError(f'Output directory {args.dataset_dir} exits. Exit program. (overwrite_output_dir=False)')
-
-
     logging_output_file = os.path.join(args.output_dir, "output.log")
     file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s")
     file_handler = logging.FileHandler(logging_output_file)
@@ -163,6 +146,7 @@ def main():
     logger.addHandler(file_handler)
 
     args.verbalizer = task_to_verbalizer.get(args.task_name)
+    args.label2token = {v:k for k,v in args.verbalizer.items()}
 
     save_config(args)
 
@@ -170,11 +154,33 @@ def main():
     set_seed(args.seed)
     random.seed(args.seed)
 
-    if args.task_name is not None and args.task_name not in task_to_path:
-        # Downloading and loading a dataset from the hub.
-        datasets = load_dataset("glue", args.task_name)
+    # In distributed training, the load_dataset function guarantee that only one local process can concurrently
+    # download the dataset.
+    raw_datasets = DatasetDict()
+    if args.task_name is not None and args.benchmark_name is not None:
+        if args.benchmark_name == 'huggingface':
+            raw_eval_dataset = load_dataset(args.task_name, split='test')
+        else:
+            # for mnli 
+            if args.task_name == "mnli":
+                raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation_matched')
+            else:
+                raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'validation')
+    # for datasets from file.
+    elif args.task_name in task_to_path:
+        dataset_processor = task_to_path[args.task_name]["dataset_processor"]
+        validation_file_path = task_to_path[args.task_name]["validation"]
+        # validation set
+        validation_dict = dataset_processor(validation_file_path)
+        raw_eval_dataset = Dataset.from_dict(validation_dict)
     else:
-        raise NotImplementedError('Tasks not in GLUE is not implemented yet.')
+        raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
+
+
+    raw_datasets['validation'] = raw_eval_dataset
+    logger.info('TRAIN / VALIDATION split.')
+    for split, dataset in raw_datasets.items():
+        logger.info(f'{split} > {len(dataset)}')
 
     
     # load OpenAI model (set connection)
@@ -189,64 +195,84 @@ def main():
         texts = (
             (examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key])
         )
-        result = dict()
-        result['sentence1'] = examples[sentence1_key]
 
-        # for single sentence tasks
-        if sentence2_key is not None:
-            result['sentence2'] = examples[sentence2_key]
+        sample_num = len(texts[0])
+        for sample_index in range(sample_num):
+            # Tokenize the texts
+            texts = (
+                (examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key])
+            )
+            result = dict()
+            sample_num = len(texts[0])
+            result['sentence1'] = examples[sentence1_key]
 
-        # Map labels to IDs (not necessary for GLUE tasks)
-        if "label" in examples:
-            result["labels"] = examples["label"]
-        return result
+            # for single sentence tasks
+            if sentence2_key is not None:
+                result['sentence2'] = examples[sentence2_key]
+                            
+            # Map labels to IDs (not necessary for GLUE tasks)
+            if "label" in examples:
+                result["labels"] = examples["label"]
+            elif 'label-coarse' in examples:
+                result["labels"] = examples['label-coarse']
+            else:
+                raise NotImplementedError
+            return result
 
-    processed_datasets = datasets.map(
+    processed_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
-        remove_columns=datasets["train"].column_names,
-        desc="Preparing dataset",
+        remove_columns=raw_datasets["validation"].column_names,
+        desc="Running tokenizer on dataset",
     )
+    eval_dataset = processed_datasets["validation"]
 
-    if "validation" not in processed_datasets and "validation_matched" not in processed_datasets:
-        raise ValueError("--do_eval requires a validation dataset")
-    if args.task_name == "mnli":
-        eval_dataset = processed_datasets["validation_mismatched"]
-        eval_dataset_mm = processed_datasets["validation_matched"]
-    else:
-        eval_dataset = processed_datasets["validation"]
-
-    logger.info(f'# Eval  dataset : {len(eval_dataset)}')
     ## DONE LOADING DATASET ##
+    logger.info("***** Zero/Few-shot Evaluation *****")
+    logger.info(f"  Num EVAL  examples = {len(eval_dataset)}")
+    logger.info(f"  Random Seed = {args.seed}")
+    logger.info(f"  Inference Model = {args.model_name_or_path}")
     
     start_time = time.time()
 
-    result_writer = os.path.join(args.dataset_dir, f"t_{args.temperature}_p_{args.top_p}_fp_{args.frequency_penalty}.tsv")
-    with open(result_writer, "w") as file_writer:
+    
+    generation_writer = os.path.join(args.output_dir, "test.tsv")
+    with open(generation_writer, "w") as file_writer:
         tsv_writer = csv.writer(file_writer, delimiter='\t')
-        tsv_writer.writerow([args.positive_prompt, args.negative_prompt])
-        tsv_writer.writerow(['index', 'sentence1', 'sentence2', 'label', 'entailment', 'not entailment'])
-        for index, inputs in tqdm(enumerate(eval_dataset)):
+        for step, inputs in tqdm(enumerate(eval_dataset)):
             
-            row = [index, inputs['sentence1'], inputs['sentence2'], inputs['labels']]
+            sentence1 = inputs['sentence1']
+            sentence2 = inputs['sentence2'] if 'sentence2' in inputs else ''
+            label = inputs['labels']
+            input_label_token = args.label2token[label]
 
-            generated_result = model.generate(
-                positive_prompt=args.positive_prompt, 
-                negative_prompt=args.negative_prompt,
-                neutral_prompt=args.neutral_prompt,
-                max_length=args.max_length,
-                temperature=args.temperature,
-                top_p=args.top_p,
-                frequency_penalty=args.frequency_penalty,
-                **inputs
-            )
+            original_input = args.prefix + sentence1 + args.infix + sentence2 + args.postfix
+            if args.input_label_token in original_input:
+                original_input = original_input.replace(args.input_label_token, input_label_token)
 
+            row = [step, label, sentence1]
 
-            for generated_sentence, expected_label in generated_result:
-                if generated_sentence is None:
-                    continue
+            if 'sentence2' in inputs:
+                row.append(sentence2)
 
-                row.append(generated_sentence)
+            for index, (label_token, label) in enumerate(args.verbalizer.items()):
+                assert index == label, f'index {index} != label {label}'
+                label_dependent_input = original_input.replace(args.label_token, label_token)
+                l = len(label_dependent_input)
+
+                generated_text = model.generate(
+                    original_input=label_dependent_input,
+                    max_length=args.max_length,
+                    temperature=args.temperature,
+                    top_p=args.top_p,
+                    frequency_penalty=args.frequency_penalty,
+                    **inputs
+                )
+
+                # to match the format from the transformers code
+                generated_outputs = [generated_text.split('\n')[0].strip()]
+
+                row.append(generated_outputs)
 
             tsv_writer.writerow(row)
         
@@ -254,5 +280,5 @@ def main():
     logger.info(f'Total time : {end_time - start_time}')
 
 if __name__ == "__main__":
-    print('start')
+    logger.info('\nStart.')
     main()

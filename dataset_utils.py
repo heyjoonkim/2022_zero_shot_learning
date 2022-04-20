@@ -6,7 +6,7 @@
 
 import csv
 import random
-from select import select
+import ast
 
 def custom_generate_dataset_dict(filename):
     input_list = []
@@ -208,6 +208,184 @@ task_to_path = {
     },
 }
 
+# Single sentence
+# for Generated datasets in TREC.
+def generated_trec_generate_dataset_dict(filename):
+    sentence1_list = []
+    label_list = []
+    samples0_list = []
+    samples1_list = []
+    samples2_list = []
+    samples3_list = []
+    samples4_list = []
+    samples5_list = []
+
+    with open(filename) as f:
+        tsv_reader = csv.reader(f, delimiter='\t')
+        for line_index, line in enumerate(tsv_reader):
+
+            assert len(line) == 9, f'Line length {len(line)} does not match the expected length 9.'
+            
+            index = int(line[0])
+            label = int(line[1])
+            sentence1 = line[2]
+
+            assert line_index == index, f'index {index} != line_index {line_index}'
+
+            # convert to list
+            samples0 = ast.literal_eval(line[3])
+            samples1 = ast.literal_eval(line[4])
+            samples2 = ast.literal_eval(line[5])
+            samples3 = ast.literal_eval(line[6])
+            samples4 = ast.literal_eval(line[7])
+            samples5 = ast.literal_eval(line[8])
+
+            assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
+            assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
+            assert len(samples0) == len(samples3), f'number samples for label 0 {samples0} does not match the number of samples for label 3 {len(samples3)}'
+            assert len(samples0) == len(samples4), f'number samples for label 0 {samples0} does not match the number of samples for label 4 {len(samples4)}'
+            assert len(samples0) == len(samples5), f'number samples for label 0 {samples0} does not match the number of samples for label 5 {len(samples5)}'
+
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+            samples0_list.append(samples0)
+            samples1_list.append(samples1)
+            samples2_list.append(samples2)
+            samples3_list.append(samples3)
+            samples4_list.append(samples4)
+            samples5_list.append(samples5)
+
+    return_dict = {
+        'text' : sentence1_list,
+        'label' : label_list,
+        'samples0' : samples0_list,
+        'samples1' : samples1_list,
+        'samples2' : samples2_list,
+        'samples3' : samples3_list,
+        'samples4' : samples4_list,
+        'samples5' : samples5_list,
+    }
+
+    return return_dict
+
+def generated_sst5_generate_dataset_dict(filename):
+    sentence1_list = []
+    label_list = []
+    samples0_list = []
+    samples1_list = []
+    samples2_list = []
+    samples3_list = []
+    samples4_list = []
+
+    with open(filename) as f:
+        tsv_reader = csv.reader(f, delimiter='\t')
+        for line_index, line in enumerate(tsv_reader):
+
+            assert len(line) == 8, f'Line length {len(line)} does not match the expected length 8.'
+            
+            index = int(line[0])
+            label = int(line[1])
+            sentence1 = line[2]
+
+            assert line_index == index, f'index {index} != line_index {line_index}'
+
+            # convert to list
+            samples0 = ast.literal_eval(line[3])
+            samples1 = ast.literal_eval(line[4])
+            samples2 = ast.literal_eval(line[5])
+            samples3 = ast.literal_eval(line[6])
+            samples4 = ast.literal_eval(line[7])
+
+            assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
+            assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
+            assert len(samples0) == len(samples3), f'number samples for label 0 {samples0} does not match the number of samples for label 3 {len(samples3)}'
+            assert len(samples0) == len(samples4), f'number samples for label 0 {samples0} does not match the number of samples for label 4 {len(samples4)}'
+            
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+            samples0_list.append(samples0)
+            samples1_list.append(samples1)
+            samples2_list.append(samples2)
+            samples3_list.append(samples3)
+            samples4_list.append(samples4)
+
+    return_dict = {
+        'sentence' : sentence1_list,
+        'label' : label_list,
+        'samples0' : samples0_list,
+        'samples1' : samples1_list,
+        'samples2' : samples2_list,
+        'samples3' : samples3_list,
+        'samples4' : samples4_list,
+    }
+
+    return return_dict
+
+def generated_cb_generate_dataset_dict(filename):
+    sentence1_list = []
+    sentence2_list = []
+    label_list = []
+    samples0_list = []
+    samples1_list = []
+    samples2_list = []
+
+    with open(filename) as f:
+        tsv_reader = csv.reader(f, delimiter='\t')
+        for line_index, line in enumerate(tsv_reader):
+
+            assert len(line) == 7, f'Line length {len(line)} does not match the expected length 7.'
+            
+            index = int(line[0])
+            label = int(line[1])
+            sentence1 = line[2]
+            sentence2 = line[3]
+
+            assert line_index == index, f'index {index} != line_index {line_index}'
+
+            # convert to list
+            samples0 = ast.literal_eval(line[4])
+            samples1 = ast.literal_eval(line[5])
+            samples2 = ast.literal_eval(line[6])
+
+            assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
+            assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
+           
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+            sentence2_list.append(sentence2)
+            samples0_list.append(samples0)
+            samples1_list.append(samples1)
+            samples2_list.append(samples2)
+
+    return_dict = {
+        'premise' : sentence1_list,
+        'hypothesis' : sentence2_list,
+        'label' : label_list,
+        'samples0' : samples0_list,
+        'samples1' : samples1_list,
+        'samples2' : samples2_list,
+    }
+
+    return return_dict
+
+# for using generated datasets.
+generated_task_to_path = {
+    
+    "trec" : {
+        "validation" : "test.tsv",
+        "dataset_processor" : generated_trec_generate_dataset_dict,
+    },
+    "sst5" : {
+        "validation" : "test.tsv",
+        "dataset_processor" : generated_sst5_generate_dataset_dict,
+    },
+
+    "cb" : {
+        "validation" : "test.tsv",
+        "dataset_processor" : generated_cb_generate_dataset_dict,
+    },
+}
+
 task_to_keys = {
     # GLUE
     "cola": ("sentence", None),
@@ -260,9 +438,9 @@ task_to_verbalizer = {
     },
     "boolq": None,
     "cb": {
-        "True" : 0,
-        "False" : 1,
-        "Neither" : 2,
+        " true" : 0,
+        " false" : 1,
+        " neither" : 2,
     },
     "stsb": None,
     "wnli": None,
@@ -363,31 +541,43 @@ def prepend_incontext_samples(
                                 full_train_samples,
                                 k,
                                 balance_sample,
-                                input_sentence,
                             ):
-    # no in-context samples = zero-shot learning
-    if k == 0:
-        return input_sentence
 
+    
     final_sentence = None
     sep = '\n\n\n'
     # sep = '\n\n\n\n'
+
+    # no in-context samples = zero-shot learning
+    if k == 0:
+        return '', sep
 
     if balance_sample:
         total_count = 0
         labels = list(label2samples.keys())
         random.shuffle(labels)
+        # prevent infinite while-loop
+        samples_map = {label:[i for i in range(len(label2samples[label]))] for label in labels}
         while True:
             for label in labels:
                 samples = label2samples[label]
                 total_length = len(samples)
+                not_used_indices = [i for i in range(total_length)]
                 while True:
+                    samples_list = samples_map[label]
                     random_index = random.randint(0, total_length-1)
                     selected_sample = samples[random_index]
+
                     # we don't want to use duplicate in-context samples
                     if final_sentence is None:
+                        selected_index = samples_list.index(random_index)
+                        samples_list.pop(selected_index)
+                        samples_map[label] = samples_list
                         break
-                    if selected_sample not in final_sentence:
+                    if random_index in samples_list:
+                        selected_index = samples_list.index(random_index)
+                        samples_list.pop(selected_index)
+                        samples_map[label] = samples_list
                         break
 
                 if final_sentence is None:
@@ -397,10 +587,9 @@ def prepend_incontext_samples(
 
                 total_count += 1
                 if total_count == k:
-                    final_sentence = final_sentence + sep + input_sentence
-                    return final_sentence
+                    return final_sentence, sep
     else:
-        total_length = len(input_sentence)
+        total_length = len(full_train_samples)
         for index in range(k):
             random_index = random.randint(0, total_length-1)
             selected_sample = full_train_samples[random_index]
@@ -409,7 +598,48 @@ def prepend_incontext_samples(
                 final_sentence = selected_sample
             else:
                 final_sentence = final_sentence + sep + selected_sample
-       
+
+    return final_sentence, sep
+
+
+
+def prepare_generated_incontext_sampling(generated_samples, 
+                                verbalizer,
+                                prefix,
+                                infix,
+                                postfix,
+                                sentence1_key,
+                                sentence2_key
+                                ):
+
+    label2token = {v:k for k,v in verbalizer.items()}
+    num_labels = len(label2token.keys())
+    label2samples_list=[] 
+    full_samples_list=[]
+
+    for samples in generated_samples:
+        label2samples = {}
+        full_samples = []
+        sentence1 = samples[sentence1_key] if sentence1_key is not None else None
+
+        for label in range(num_labels):
+            label_token = label2token[label]
+            key = f'samples{label}'
+            samples_list = samples[key]
+
+            promped_samples_list = []
+            for sample_index, sample in enumerate(samples_list):
+                if sentence1:
+                    promped_samples_list.append(prefix + sentence1 + infix + sample +postfix + label_token)
+                else:
+                    promped_samples_list.append(prefix + sample + infix + postfix + label_token)
+            # samples_list = [prefix + sample + infix + postfix + label_token for sample in samples_list]
+
+            full_samples = full_samples + promped_samples_list
+            label2samples[label] = promped_samples_list
         
-    final_sentence = final_sentence + sep + input_sentence
-    return final_sentence
+        label2samples_list.append(label2samples)
+        full_samples_list.append(full_samples)
+
+
+    return label2samples_list, full_samples_list

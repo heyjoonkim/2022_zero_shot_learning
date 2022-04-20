@@ -1,26 +1,39 @@
 
 output_dir="./outputs"
-dataset_dir="./generated_datasets"
-task="rte"
-model="davinci"
-time=`date +%Y-%m-%d-%T`
+main_path="./generated_datasets"
 
-max_length="30"
-temperature="0.1"
+task='trec'
+benchmark="huggingface"
+
+main_model="davinci"
+
+# generation parameters
+max_length="15"
+temperature="0.5"
 top_p="1"
-frequency_penalty="0.3"
+frequency_penalty="0"
 
 
+seeds="1" # 2 3 4 5"
+
+for seed in $seeds; do
 python openai_generate.py \
     --task_name $task \
-    --output_dir $output_dir/$task/$time \
-    --dataset_dir $dataset_dir/$task \
-    --model_name_or_path $model \
+    --benchmark_name $benchmark \
+    --output_dir $main_path/$task/$main_model/template3/$seed/ \
+    --model_name_or_path $main_model \
     --overwrite_output_dir \
-    --seed 1234 \
+    --seed $seed \
     --max_length $max_length \
     --temperature $temperature \
     --top_p $top_p \
     --frequency_penalty $frequency_penalty \
-    --positive_prompt " In other words," \
-    --negative_prompt " Furthermore,"
+    --label_token '[LABEL]' \
+    --input_label_token '[INPUT_LABEL]' \
+    --prefix 'Generate a question about
+"[INPUT_LABEL]" : ' \
+    --infix '
+Generate a question about
+"[LABEL]" :' \
+    --postfix ''
+done

@@ -91,8 +91,8 @@ class GPT2Wrapper(torch.nn.Module):
         **kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        print('=' * 50)
-        print('input sentence :\n', input_sentence)
+        # print('=' * 50)
+        # print('input sentence :\n', input_sentence)
 
         if self.multiple_token_flag:
             predictions = []

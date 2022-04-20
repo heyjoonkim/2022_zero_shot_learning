@@ -153,8 +153,8 @@ def main():
 
     label2count = {}
 
-    dataset = train_dataset
-    # dataset = eval_dataset
+    # dataset = train_dataset
+    dataset = eval_dataset
 
     for index, inputs in tqdm(enumerate(dataset)):
 

@@ -49,7 +49,7 @@ class ModelWrapper:
 
         for label_token,label in self.verbalizer.items():
             input_sentence_with_label = input_sentence + label_token
-            print(input_sentence_with_label)
+            # print(input_sentence_with_label)
 
             sleep_time = 1
             while True:
@@ -79,7 +79,7 @@ class ModelWrapper:
             label_token_input_ids = self.tokenizer(label_token)['input_ids']
             label_token_ids_length = len(label_token_input_ids)
 
-            print(label_token, '->', label_token_ids_length)
+            # print(label_token, '->', label_token_ids_length)
 
             # all the log-probabilities for the label token 
             label_probs = token_logprobs[-label_token_ids_length:]
@@ -101,9 +101,7 @@ class ModelWrapper:
     
     def generate(
         self,
-        positive_prompt=None,
-        neutral_prompt=None,
-        negative_prompt=None,
+        original_input,
         max_length=None,
         temperature=None,
         top_p=None,
@@ -116,52 +114,24 @@ class ModelWrapper:
     ):
 
 
-        positive_label = 0
-        negative_label = 1 if neutral_prompt is None else 2
-        neutral_label = 1 if neutral_prompt is not None else None
+        sleep_time = 1
+        while True:
+            try:
+                response = openai.Completion.create(
+                    engine=self.model,
+                    prompt=original_input,
+                    temperature=temperature,
+                    max_tokens=max_length,
+                    top_p=top_p,
+                    frequency_penalty=frequency_penalty,
+                )
+                break
+            except:
+                print(f'Error from OpenAI API. Pending for {sleep_time} seconds...')
+                time.sleep(sleep_time)
+                sleep_time += self.retry_delay
+        data = response['choices'][0]
+        generated_text = data['text']
 
-        prompt_list = [(positive_prompt, positive_label), (neutral_prompt, neutral_label), (negative_prompt, negative_label)]
-
-        generated_result = []
-        for prompt, expected_label in prompt_list:
-            if prompt is None:
-                generated_result.append((None, None))
-                continue
-            
-            input_sentence_with_prompt = sentence1 + prompt
-
-            sleep_time = 1
-            while True:
-                try:
-                    response = openai.Completion.create(
-                        engine=self.model,
-                        prompt=input_sentence_with_prompt,
-                        temperature=temperature,
-                        max_tokens=max_length,
-                        top_p=top_p,
-                        frequency_penalty=frequency_penalty,
-                    )
-                    break
-                except:
-                    print(f'Error from OpenAI API. Pending for {sleep_time} seconds...')
-                    time.sleep(sleep_time)
-                    sleep_time += self.retry_delay
-            data = response['choices'][0]
-            generated_text = data['text']
-
-
-            # we only use the first generated text
-            if '.' in generated_text:
-                index = generated_text.rindex('.')
-                generated_text = generated_text[:index]
-
-            generated_text = generated_text.strip()
-            generated_text = generated_text + '.'
-
-            print(input_sentence_with_prompt, '->', generated_text)
-
-            generated_result.append((generated_text, expected_label))
-        
-        # list : [(generated_text, exptected_label), ..., ]
-        return generated_result
+        return generated_text
         

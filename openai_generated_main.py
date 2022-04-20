@@ -1,21 +1,3 @@
-#!/usr/bin/env python
-# coding=utf-8
-# Copyright 2020 The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-""" Finetuning the library models for sequence classification on GLUE."""
-# You can also adapt this script on your own text classification task. Pointers for this are left as comments.
-
 import argparse
 import logging
 import os
@@ -33,9 +15,7 @@ from transformers import set_seed
 from model_wrapper.ModelWrapper import ModelWrapper
 
 from utils import save_config
-from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer
-from dataset_utils import prepare_incontext_sampling, prepend_incontext_samples
-
+from dataset_utils import generated_task_to_path, task_to_keys, task_to_verbalizer, prepare_generated_incontext_sampling, prepend_incontext_samples
 
 logger = logging.getLogger(__name__)
 def parse_args():
@@ -46,13 +26,6 @@ def parse_args():
         default=None,
         help="The name of the glue task to train on.",
         choices=list(task_to_keys.keys()),
-    )
-    parser.add_argument(
-        "--benchmark_name",
-        type=str,
-        default=None,
-        help="The name of the benchmark to train on.",
-        choices=['glue', 'super_glue', 'huggingface'],
     )
     parser.add_argument(
         "--model_name_or_path",
@@ -67,6 +40,12 @@ def parse_args():
         help="Where to store the final model."
     )
     parser.add_argument(
+        "--dataset_dir", 
+        type=str, 
+        default=None, 
+        help="Path for the generated datasets."
+    )
+    parser.add_argument(
         '--overwrite_output_dir', 
         default=False, 
         action="store_true",
@@ -79,6 +58,7 @@ def parse_args():
         help="A seed for reproducible training."
     )
     
+    # for Few-shot inference
     parser.add_argument(
         "--n_samples", 
         type=int, 
@@ -111,12 +91,6 @@ def parse_args():
         help="Postfix prompt.",
     )
     # until here #
-    parser.add_argument(
-        "--sep",
-        type=str,
-        default='\n\n\n',
-        help="Token seperating each samples.",
-    )
 
     args = parser.parse_args()
     
@@ -124,10 +98,7 @@ def parse_args():
     
 
 def main():
-
-
     args = parse_args()
-
 
     # Setup logging
     logging.basicConfig(
@@ -151,6 +122,7 @@ def main():
     logger.addHandler(file_handler)
 
     args.verbalizer = task_to_verbalizer.get(args.task_name)
+    args.label2token = {v:k for k,v in args.verbalizer.items()}
 
     save_config(args)
 
@@ -158,53 +130,28 @@ def main():
     set_seed(args.seed)
     random.seed(args.seed)
 
-    # In distributed training, the load_dataset function guarantee that only one local process can concurrently
-    # download the dataset.
+    ## load generated dataset ##
     raw_datasets = DatasetDict()
-    if args.task_name is not None and args.benchmark_name is not None:
-        if args.benchmark_name == 'huggingface':
-            raw_train_dataset = load_dataset(args.task_name, split='train')
-            raw_eval_dataset = load_dataset(args.task_name, split='test')
-        else:
-            # Downloading and loading a dataset from the hub.
-            raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
-            # for mnli 
-            if args.task_name == "mnli":
-                raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation_matched')
-            else:
-                raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'validation')
     # for datasets from file.
-    elif args.task_name in task_to_path:
-        dataset_processor = task_to_path[args.task_name]["dataset_processor"]
-        train_file_path = task_to_path[args.task_name]["train"]
-        validation_file_path = task_to_path[args.task_name]["validation"]
+    if args.task_name in generated_task_to_path:
+        dataset_processor = generated_task_to_path[args.task_name]["dataset_processor"]
+        validation_file_path = generated_task_to_path[args.task_name]["validation"]
+        validation_file_path = os.path.join(args.dataset_dir, validation_file_path)
 
-        # train set
-        train_dict = dataset_processor(train_file_path)
-        raw_train_dataset = Dataset.from_dict(train_dict)
         # validation set
         validation_dict = dataset_processor(validation_file_path)
         raw_eval_dataset = Dataset.from_dict(validation_dict)
     else:
         raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
 
-    raw_datasets['train'] = raw_train_dataset
     raw_datasets['validation'] = raw_eval_dataset
-    
-    # Labels
-    if args.task_name is not None and args.benchmark_name is not None:
-        if args.benchmark_name == 'huggingface':
-            # TODO : fix?
-            label_list = raw_datasets["train"].features["label-coarse"].names
-        else:
-            # label_list : ['entailment', 'not_entailment']
-            label_list = raw_datasets["train"].features["label"].names
-        num_labels = len(label_list)
-    elif args.task_name in task_to_path:
-        label_list = set(raw_datasets["train"]['label'])
-        num_labels = len(label_list)
-    else:
-        raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
+
+    raw_datasets['validation'] = raw_eval_dataset
+    logger.info('TRAIN / VALIDATION split.')
+    for split, dataset in raw_datasets.items():
+        logger.info(f'{split} > {len(dataset)}')
+    ## done loading generated dataset ##
+
     
     # load OpenAI model (set connection)
     model = ModelWrapper(args.model_name_or_path, args.task_name)
@@ -212,11 +159,9 @@ def main():
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
 
-    label2samples, full_train_samples = prepare_incontext_sampling(
-        train_samples=raw_datasets['train'],
+    label2samples_list, full_train_samples_list = prepare_generated_incontext_sampling(
+        generated_samples=raw_datasets['validation'],
         verbalizer=args.verbalizer,
-        sentence1_key=sentence1_key,
-        sentence2_key=sentence2_key,
         prefix=args.prefix,
         infix=args.infix,
         postfix=args.postfix)
@@ -263,65 +208,40 @@ def main():
     processed_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
-        remove_columns=raw_datasets["train"].column_names,
-        desc="Preparing dataset",
+        remove_columns=raw_datasets["validation"].column_names,
+        desc="Running tokenizer on dataset",
     )
-
-    train_dataset = processed_datasets["train"]
     eval_dataset = processed_datasets["validation"]
 
-
+    ## DONE LOADING DATASET ##
     logger.info("***** Zero/Few-shot Evaluation *****")
-    logger.info(f"  Num TRAIN examples = {len(train_dataset)}")
     logger.info(f"  Num EVAL  examples = {len(eval_dataset)}")
     logger.info(f"  Random Seed = {args.seed}")
     logger.info(f"  K = {args.n_samples}")
     logger.info(f"  Inference Model = {args.model_name_or_path}")
-
+    
     correct_count=0
     start_time = time.time()
-    ## select 
-    incontext_samples, sep = prepend_incontext_samples(
-        label2samples=label2samples,
-        full_train_samples=full_train_samples,
-        k=args.n_samples,
-        balance_sample=args.balance_sample,
-    )
-
-
-    result_writer = os.path.join(args.output_dir, f"wrong_samples_k_{args.n_samples}_seed_{args.seed}.tsv")
-    with open(result_writer, "w") as file_writer:
-        tsv_writer = csv.writer(file_writer, delimiter='\t')
-        tsv_writer.writerow([args.prefix, args.infix, args.postfix])
-        tsv_writer.writerow(['index', 'sentence1', 'sentence2', 'prediction', 'label', 'top_logprobs'])
-        for index, inputs in tqdm(enumerate(eval_dataset)):
-
-            if args.n_samples > 0:
-                inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
-
-            # print(inputs['input_sentence'])
-            # continue
-
-            label = inputs['labels']
-            prediction, results_dict = model.forward(**inputs)
-
-            if prediction == label:
-                correct_count += 1
-            else: 
-                sentence2 = inputs['sentence2'] if 'sentence2' in inputs else ''
-                tsv_writer.writerow([index, inputs['sentence1'], sentence2, prediction, label, str(results_dict)])
-
-            # TODO : removes
-            # if index > 20:
-            #     break
-            # logger.info(f'{index} | {correct_count} / {len(eval_dataset)}')
-            
-        result = correct_count / len(eval_dataset) * 100
-        logger.info(f'Result : {correct_count} / {len(eval_dataset)} = {result}%')
-
-        tsv_writer.writerow([correct_count, len(eval_dataset), result])
-
+    for step, inputs in tqdm(enumerate(eval_dataset)):
         
+        # in-context samples generated conditioned by the input x.
+        if args.n_samples > 0:
+            incontext_samples, sep = prepend_incontext_samples(
+                label2samples=label2samples_list[step],
+                full_train_samples=full_train_samples_list[step],
+                k=args.n_samples,
+                balance_sample=args.balance_sample,
+            )
+            inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
+         
+        label = inputs['labels']
+        prediction, results_dict = model.forward(**inputs)
+
+        if prediction == label:
+            correct_count += 1
+    result = correct_count / len(eval_dataset) * 100
+    logger.info(f'Result : {correct_count} / {len(eval_dataset)} = {result}%')
+    
     end_time = time.time()
     logger.info(f'Total time : {end_time - start_time}')
 
