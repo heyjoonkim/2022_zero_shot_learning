@@ -620,7 +620,8 @@ def prepare_generated_incontext_sampling(generated_samples,
     for samples in generated_samples:
         label2samples = {}
         full_samples = []
-        sentence1 = samples[sentence1_key] if sentence1_key is not None else None
+        # if sentence2_key is not None -> sentence-pair task -> use the first sentence
+        sentence1 = samples[sentence1_key] if sentence2_key is not None else None
 
         for label in range(num_labels):
             label_token = label2token[label]

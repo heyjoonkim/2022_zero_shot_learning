@@ -13,6 +13,7 @@ from tqdm.auto import tqdm
 import transformers
 from transformers.deepspeed import HfDeepSpeedConfig
 from transformers import (
+    AdamW,
     AutoConfig,
     AutoTokenizer,
     set_seed,
@@ -325,6 +326,7 @@ def main():
     
 
     model_engine, _, _, _ = deepspeed.initialize(model=model, optimizer=None, lr_scheduler=None, config_params=args.ds_config)
+
     
 
     # Evaluate! 
@@ -370,7 +372,7 @@ def main():
 
         label = torch.tensor(inputs['labels']).to(model_engine.device).unsqueeze(dim=0)
 
-        prediction = model(**inputs)
+        prediction, predictions = model(**inputs)
         # print(f'label {label} <-> prediction {prediction}')
         
         metric.add_batch(

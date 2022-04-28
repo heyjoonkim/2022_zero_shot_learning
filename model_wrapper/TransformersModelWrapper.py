@@ -121,12 +121,16 @@ class GPT2Wrapper(torch.nn.Module):
         else:
             # tokenize label specific input sentence 
             tokenized_inputs = self.tokenizer(input_sentence, return_tensors='pt').to(self.transformer.device)
-            # print('input ids', tokenized_inputs['input_ids'])
+            print('input ids', len(tokenized_inputs['input_ids']))
 
             outputs = self.transformer(**tokenized_inputs)
+
+            del tokenized_inputs
+            torch.cuda.empty_cache()
                 
             # shape : (1, length, vocab_size)
-            logits = outputs.logits
+            logits = outputs.logits.cpu()
+            del outputs
 
             probs = torch.softmax(logits, dim=2)
             # shape : (1, length, vocab_size)
@@ -137,4 +141,4 @@ class GPT2Wrapper(torch.nn.Module):
         prediction = torch.argmax(predictions, dim=-1)
 
         # shape : (1, )
-        return prediction.unsqueeze(dim=0)
+        return prediction.unsqueeze(dim=0), predictions

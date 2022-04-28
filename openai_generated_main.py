@@ -164,7 +164,9 @@ def main():
         verbalizer=args.verbalizer,
         prefix=args.prefix,
         infix=args.infix,
-        postfix=args.postfix)
+        postfix=args.postfix,
+        sentence1_key=sentence1_key,
+        sentence2_key=sentence2_key)
     
     def preprocess_function(examples):
         # Tokenize the texts

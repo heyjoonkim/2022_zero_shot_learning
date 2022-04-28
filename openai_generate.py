@@ -260,17 +260,29 @@ def main():
                 label_dependent_input = original_input.replace(args.label_token, label_token)
                 l = len(label_dependent_input)
 
-                generated_text = model.generate(
-                    original_input=label_dependent_input,
-                    max_length=args.max_length,
-                    temperature=args.temperature,
-                    top_p=args.top_p,
-                    frequency_penalty=args.frequency_penalty,
-                    **inputs
-                )
+                wrong_generation_count = 0
+                while True:
+                    generated_text = model.generate(
+                        original_input=label_dependent_input,
+                        max_length=args.max_length,
+                        temperature=args.temperature,
+                        top_p=args.top_p,
+                        frequency_penalty=args.frequency_penalty,
+                        **inputs
+                    )
 
-                # to match the format from the transformers code
-                generated_outputs = [generated_text.split('\n')[0].strip()]
+                    generated_text = generated_text.strip().split('\n')[0].strip()
+                    if len(generated_text) == 0:
+                        wrong_generation_count += 1
+                        print(f'Nothing generated. Retry.... {wrong_generation_count}')
+                        if wrong_generation_count >= 5:
+                            print("Cannot generate a sample for input :")
+                            print(label_dependent_input)
+                            break
+                    else:
+                        # to match the format from the transformers code
+                        generated_outputs = [generated_text]
+                        break
 
                 row.append(generated_outputs)
 
