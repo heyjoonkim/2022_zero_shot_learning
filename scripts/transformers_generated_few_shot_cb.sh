@@ -114,3 +114,7 @@ deepspeed transformers_generated_main.py \
     done
 done
 # Minimal template #
+
+
+
+    # --ds_config ds_configs/fp16.json \

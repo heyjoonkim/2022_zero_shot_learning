@@ -5,7 +5,8 @@ main_path="./generated_datasets"
 task='trec'
 benchmark="huggingface"
 
-main_model="davinci"
+# main_model="davinci"
+main_model="text-davinci-002"
 
 # generation parameters
 max_length="15"
