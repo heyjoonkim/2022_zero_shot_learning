@@ -3,6 +3,7 @@ outputs/*
 generated_datasets/*
 tmp/*
 test_results/*
+data
 
 # deepspeed configs
 ds_configs/
