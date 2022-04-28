@@ -245,7 +245,8 @@ task_to_keys = {
     "yahoo": ("sentence1", "sentence2"),
     "yelp": ("sentence", None),
     "poem_sentiment": ("verse_text", None),
-    "hate": ("text", None)
+    "hate": ("text", None),
+    "sick": ("sentence_A", "sentence_B")
 }
 task_to_label = {
     "trec": "label-coarse",
@@ -269,12 +270,12 @@ task_to_verbalizer = {
     "rte": {
         # " positive" : 0,  # entailment
         # " negative" : 1    # not entailment
-        "entailment" : 0,  # entailment
-        "not_entailment" : 1    # not entailment
-        # " Yes" : 0,  # entailment
-        # " No" : 1    # not entailment
-        # " True" : 0,  # entailment
-        # " False" : 1    # not entailment
+        # "entailment" : 0,  # entailment
+        # "not_entailment" : 1    # not entailment
+        # " yes" : 0,  # entailment
+        # " no" : 1    # not entailment
+        " True" : 0,  # entailment
+        " False" : 1    # not entailment
     },
     "sst2": {
         " negative" : 0,
@@ -298,8 +299,8 @@ task_to_verbalizer = {
         # "not_entailment" : 1    # not entailment
         # " Yes" : 0,  # entailment
         # " No" : 1    # not entailment
-        "True" : 0,  # entailment
-        "False" : 1    # not entailment
+        " True" : 0,  # entailment
+        " False" : 1    # not entailment
     },
     "mr": None,
     "cr": None,
@@ -314,10 +315,10 @@ task_to_verbalizer = {
         " location": 5
     },
     "ag_news": {
-        "world" : 0,
-        "sports" : 1,
-        "business" : 2,
-        "technology" : 3,
+        " world" : 0,
+        " sports" : 1,
+        " business" : 2,
+        " technology" : 3,
     },
     "yahoo" : {
         " Society" : 0,
@@ -346,13 +347,23 @@ task_to_verbalizer = {
         ' great' : 4,
     },
     "poem_sentiment": {
-        'negative': 0,
-        'positive': 1,
-        'no_impact': 2
+        ' negative': 0,
+        ' positive': 1,
+        # ' no_impact': 2
+        ' maybe': 2,
     },
     "hate": {
-        'non_hate': 0,
-        'hate': 1
+        # '\nnon-hate': 0,
+        # '\nhate': 1,
+        ' positive': 0,
+        ' negative': 1
+    },
+    "sick": {
+        # '\nnon-hate': 0,
+        # '\nhate': 1,
+        " Maybe" : 1, # neutral
+        " True" : 0,  # entailment
+        " False" : 2    # not entailment
     }
 }
 

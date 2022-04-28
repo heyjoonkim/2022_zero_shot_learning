@@ -23,11 +23,14 @@ import sys
 import time
 import csv
 import random
+import json
+import pandas as pd    
 from collections import defaultdict
 
 import numpy as np
 from tqdm.auto import tqdm
 from datasets import load_dataset
+
 
 from transformers import set_seed
 
@@ -35,6 +38,7 @@ from model_wrapper.ModelWrapper import ModelWrapper
 
 from utils import save_config
 from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer, GLUE, task_to_label
+from preprocess import rte_preprocess
 
 logger = logging.getLogger(__name__)
 def parse_args():
@@ -202,40 +206,43 @@ def main():
         return result
 
     processed_datasets = datasets.map(
-        preprocess_function,
-        batched=True,
+        rte_preprocess,
+        batched=False,
         remove_columns=datasets["train"].column_names,
         desc="Preparing dataset",
     )
 
     if "train" not in processed_datasets:
         raise ValueError("requires a train dataset")
-
     train_dataset = processed_datasets["train"]
-    train_dataset = train_dataset.filter(lambda example: example['labels'] in args.verbalizer.values())
+
+    # with open(f"data/tweet_eval-hate_16_{args.seed}_train.jsonl", "r") as t_f:
+    #     pre_sampled_data = [json.loads(line) for line in t_f]
+    #     print(pre_sampled_data)
     # if "validation" not in processed_datasets and "validation_matched" not in processed_datasets:
     #     raise ValueError("requires a validation dataset")
     if args.task_name == "mnli":
         eval_dataset = processed_datasets["validation_matched"]
         eval_dataset_mm = processed_datasets["validation_mismatched"]
-    elif args.task_name == "trec" or args.task_name == "ag_news" or args.task_name == "poem_sentiment":
+    elif args.task_name == "trec":
         eval_dataset = processed_datasets["test"]
     else:
         eval_dataset = processed_datasets["validation"]
 
-    if args.task_name == "ag_news":
-        eval_dataset = eval_dataset.select(range(300))
 
     logger.info(f'# TRAIN dataset : {len(train_dataset)}')
     logger.info(f'# Eval  dataset : {len(eval_dataset)}')
-       
+
     for index in random.sample(range(len(train_dataset)), 1):
         logger.info(f"Sample {index} of the training set: {train_dataset[index]['input_sentence']}")
 
     # for random sampling #
     train_dataset_length = len(train_dataset)
     ## DONE LOADING DATASET ##
-    
+    no_dataset = train_dataset.filter(lambda example: example['labels']==2)
+    pos_dataset = train_dataset.filter(lambda example: example['labels']==1)
+    neg_dataset = train_dataset.filter(lambda example: example['labels']==0)
+
     correct_count=0
 
     start_time = time.time()
@@ -245,37 +252,92 @@ def main():
         file_writer = open(result_writer, "w")
         tsv_writer = csv.writer(file_writer, delimiter='\t')
         tsv_writer.writerow(['index', 'prediction', 'label', 'top_logprobs'])
+
+    # in_context_samples = []
+    # for d in pre_sampled_data:
+    #     sample_input_sentence = d['input'] + "\n" + d['output']
+    #     in_context_samples.append(sample_input_sentence)
+    # in_context_samples = '\n\n\n'.join(in_context_samples)
+    # logger.info(f'in context samples\n{in_context_samples}')
     if args.n_samples > 0:
         in_context_samples = []
-        random_indices = []
-        for _ in range(args.n_samples):
-            random_indices.append(random.randint(0, train_dataset_length-1))
-        for random_index in random_indices:
-            random_sample = train_dataset[random_index]
-            random_sample_input_sentence = random_sample['input_sentence']
+        no_indices = []
+        pos_indices = []
+        neg_indices = []
+        for _ in range(6):
+            no_indices.append(random.randint(0, no_dataset-1))
+        for _ in range(5):
+            pos_indices.append(random.randint(0, pos_dataset-1))
+            neg_indices.append(random.randint(0, neg_dataset-1))
+        for idx in range(5)
+            no_sample = no_dataset[no_indices[idx]]
+            no_sample_input_sentence = no_sample['input_sentence']
             # A% demo accuracy
             if np.random.rand(1)[0] <= args.demo_accuracy:
-                random_sample_label = random_sample['labels']
+                no_sample_label = no_sample['labels']
             else:
                 labels = list(args.verbalizer.values())
-                labels.remove(random_sample['labels'])
-                random_sample_label = random.choice(labels)
+                labels.remove(no_sample['labels'])
+                no_sample_label = random.choice(labels)
             for k,v in args.verbalizer.items():
-                if random_sample_label == v:
-                    random_sample_input_sentence = random_sample_input_sentence + k
+                if no_sample_label == v:
+                    no_sample_input_sentence = no_sample_input_sentence + k
                     break
-            in_context_samples.append(random_sample_input_sentence)
+            in_context_samples.append(no_sample_input_sentence)
+
+            pos_sample = pos_dataset[pos_indices[idx]]
+            pos_sample_input_sentence = pos_sample['input_sentence']
+            # A% demo accuracy
+            if np.random.rand(1)[0] <= args.demo_accuracy:
+                pos_sample_label = pos_sample['labels']
+            else:
+                labels = list(args.verbalizer.values())
+                labels.remove(pos_sample['labels'])
+                pos_sample_label = random.choice(labels)
+            for k,v in args.verbalizer.items():
+                if pos_sample_label == v:
+                    pos_sample_input_sentence = pos_sample_input_sentence + k
+                    break
+            in_context_samples.append(pos_sample_input_sentence)
+
+            neg_sample = neg_dataset[neg_indices[idx]]
+            neg_sample_input_sentence = neg_sample['input_sentence']
+            # A% demo accuracy
+            if np.random.rand(1)[0] <= args.demo_accuracy:
+                neg_sample_label = neg_sample['labels']
+            else:
+                labels = list(args.verbalizer.values())
+                labels.remove(neg_sample['labels'])
+                neg_sample_label = random.choice(labels)
+            for k,v in args.verbalizer.items():
+                if neg_sample_label == v:
+                    neg_sample_input_sentence = neg_sample_input_sentence + k
+                    break
+            in_context_samples.append(neg_sample_input_sentence)
+        no_sample = no_dataset[no_indices[5]]
+        no_sample_input_sentence = no_sample['input_sentence']
+        # A% demo accuracy
+        if np.random.rand(1)[0] <= args.demo_accuracy:
+            no_sample_label = no_sample['labels']
+        else:
+            labels = list(args.verbalizer.values())
+            labels.remove(no_sample['labels'])
+            no_sample_label = random.choice(labels)
+        for k,v in args.verbalizer.items():
+            if no_sample_label == v:
+                no_sample_input_sentence = no_sample_input_sentence + k
+                break
+        in_context_samples.append(no_sample_input_sentence)
         in_context_samples = '\n\n\n'.join(in_context_samples)
         logger.info(f'in context samples\n{in_context_samples}')
-        
+
     accs = []
     precisions = defaultdict(list)
     recalls = defaultdict(list)
     for index, inputs in tqdm(enumerate(eval_dataset)):
         ## select 
-        if args.n_samples > 0:
-            inputs['input_sentence'] = '\n\n\n'.join([in_context_samples, inputs['input_sentence']])
 
+        inputs['input_sentence'] = '\n\n\n'.join([in_context_samples, inputs['input_sentence']])
         label = inputs['labels']
         prediction, results_dict = model.forward(**inputs)
 
@@ -289,7 +351,7 @@ def main():
 
         if args.log_results:
             tsv_writer.writerow([index, prediction, label, str(results_dict)])
-
+        
     acc = np.mean(accs)
     f1s = []
     for key in recalls:
@@ -300,12 +362,6 @@ def main():
         else:
             f1s.append(2*precision*recall / (precision+recall))
     f1 = np.mean(f1s)
-
-    
-    result_path = str(args.output_dir).rsplit('/',1)[0] + '/resuts.txt'
-    with open(result_path, "a+") as f:
-        tsv_writer = csv.writer(f, delimiter='\t')
-        tsv_writer.writerow([args.seed, acc*100, f1*100])
 
     logger.info(f'ACC : {acc*100} F1: {f1*100}')
     end_time = time.time()

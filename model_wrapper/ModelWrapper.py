@@ -53,6 +53,10 @@ class ModelWrapper:
             input_sentence_with_label = input_sentence + label_token
             # print(input_sentence_with_label)
 
+            # check tokenization of the label token #
+            label_token_input_ids = self.tokenizer(label_token)['input_ids']
+            label_token_ids_length = len(label_token_input_ids)
+
             sleep_time = 1
 
             while True:
@@ -78,7 +82,8 @@ class ModelWrapper:
                             frequency_penalty=0,
                             presence_penalty=0,
                             echo=True,
-                            logprobs=1
+                            logprobs=1,
+                            n=label_token_ids_length
                         )
                     break
                 except:
@@ -89,10 +94,9 @@ class ModelWrapper:
             data = response['choices'][0]
             logprobs = data['logprobs']
             token_logprobs = logprobs['token_logprobs']
-            # check tokenization of the label token #
-            label_token_input_ids = self.tokenizer(label_token)['input_ids']
-            label_token_ids_length = len(label_token_input_ids)
 
+            loss = data['loss']
+            # print(label_token, '->', [self.tokenizer.convert_tokens_to_string(self.tokenizer.convert_ids_to_tokens(token)) for token in label_token_input_ids])
             # print(label_token, '->', label_token_ids_length)
 
             # all the log-probabilities for the label token 
@@ -101,8 +105,9 @@ class ModelWrapper:
             for prob in label_probs:
                 label_prob += prob
 
-            label_prob /= label_token_ids_length
+            # label_prob /= label_token_ids_length
             # label_prob = token_logprobs[-1]
+            label_prob = -loss
 
             results_dict[label_token] = label_prob
 
@@ -186,7 +191,7 @@ class ModelWrapper:
         
 
 class FlaskModel:
-    def __init__(self, model_name_or_path, url='http://127.0.0.1:5000/'):
+    def __init__(self, model_name_or_path, url='http://127.0.0.1:9999/'):
 
         self.url = url
         r = requests.get(self.url)

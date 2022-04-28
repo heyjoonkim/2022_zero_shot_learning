@@ -8,4 +8,5 @@ python main.py \
             --output_dir outputs/$task/300_w_prompt_gen_4shot \
             --seed $seed \
             --overwrite_output_dir \
-            --postfix "\nThe sentiment is: "
+            --postfix "
+The sentiment is: "

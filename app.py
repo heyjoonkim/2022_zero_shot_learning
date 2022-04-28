@@ -51,12 +51,13 @@ def completion():
 
     sm = LogSoftmax(dim=1)
     inputs = tokenizer(prompt, truncation=True, max_length=1024, return_tensors="pt").to(device)
+    # print(inputs['input_ids'][0])
     input_len = len(inputs['input_ids'][0])
     outputs = model(**inputs)
     logits = outputs.logits[0][:-1].cpu().detach()
 
     if max_tokens == 0:
-        total_logits = logits
+        total_logits = logits.to(torch.float32)
         output_ids = inputs['input_ids'][0]
     else:
         sample_outputs = model.generate(
@@ -71,13 +72,13 @@ def completion():
             top_k=0,
             repetition_penalty=2.0
         )
-        output_ids = sample_outputs.sequences[0].cpu().detach()
-        generated_logits = torch.cat(sample_outputs.scores,dim=0).cpu().detach()
+        output_ids = sample_outputs.sequences[0].cpu().detach().to(torch.float32)
+        generated_logits = torch.cat(sample_outputs.scores,dim=0).cpu().detach().to(torch.float32)
         total_logits = torch.cat([logits, generated_logits],dim=0)
 
 
     prob = sm(total_logits)
-
+    
     output_prob = prob[range(prob.shape[0]), output_ids[1:]]
     output_prob = output_prob.cpu().detach().tolist()
 
@@ -93,11 +94,28 @@ def completion():
         token_logprobs = token_logprobs[input_len:]
     text = ''.join(tokens)
 
-    result = {'logprobs': {'token_logprobs': token_logprobs, 'tokens':tokens}, 'text': text}
+
+    labels = inputs['input_ids'][0]
+    labels = labels[1:].contiguous()
+    labels = labels.cpu().detach()
+
+    total_logits = total_logits.to(torch.float32)
+
+    loss_fct = CrossEntropyLoss(reduction="none")
+    losses = loss_fct(total_logits.view(-1, total_logits.size(-1)), labels.view(-1)) # [batch_size, length]
+
+    label_mask = torch.zeros([len(labels)])
+    for i in range(1, n+1):
+        label_mask[-i] = 1
+
+    losses = losses * label_mask
+    loss = (torch.sum(losses, axis=0) / n).item()
+
+    result = {'logprobs': {'token_logprobs': token_logprobs, 'tokens':tokens}, 'text': text, 'loss': loss}
     results = {'choices':[result]}
 
     return jsonify(results), 200
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
