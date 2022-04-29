@@ -609,7 +609,8 @@ def prepare_generated_incontext_sampling(generated_samples,
                                 infix,
                                 postfix,
                                 sentence1_key,
-                                sentence2_key
+                                sentence2_key,
+                                append_label=True
                                 ):
 
     label2token = {v:k for k,v in verbalizer.items()}
@@ -625,6 +626,8 @@ def prepare_generated_incontext_sampling(generated_samples,
 
         for label in range(num_labels):
             label_token = label2token[label]
+            if not append_label:
+                label_token = ''
             key = f'samples{label}'
             samples_list = samples[key]
 

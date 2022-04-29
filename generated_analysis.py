@@ -15,7 +15,6 @@ from transformers.deepspeed import HfDeepSpeedConfig
 import torch
 import deepspeed
 
-from utils import save_config
 from dataset_utils import generated_task_to_path, task_to_keys, task_to_verbalizer, prepare_generated_incontext_sampling
 
 logger = logging.getLogger(__name__)
@@ -112,6 +111,7 @@ def main():
     logger.setLevel(logging.INFO if args.local_rank == 0 else logging.ERROR)
 
     args.verbalizer = task_to_verbalizer.get(args.task_name)
+    args.label2token = {v:k for k,v in args.verbalizer.items()}
 
     if args.local_rank == 0:
         datasets.utils.logging.set_verbosity_warning()
@@ -148,7 +148,8 @@ def main():
         infix=args.infix,
         postfix=args.postfix,
         sentence1_key=sentence1_key,
-        sentence2_key=sentence2_key)
+        sentence2_key=sentence2_key,
+        append_label=False)
 
     def preprocess_function(examples):
         # Tokenize the texts
@@ -213,13 +214,13 @@ def main():
     for step, inputs in tqdm(enumerate(eval_dataset), disable=(args.local_rank != 0)):
 
         print(f'INDEX : {step}')
-        print(f'LABEL : {inputs["labels"]}')
+        print(f'LABEL : {args.label2token[inputs["labels"]]}')
         print(f'Input sentence : \n{inputs["input_sentence"]}')
 
         label2samples=label2samples_list[step]
 
         for label, samples in label2samples.items():
-            print(f'Generated label : {label}')
+            print(f'Generated label : {args.label2token[label]}')
             for i, sample in enumerate(samples):
                 print(i, sample)
 

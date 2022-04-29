@@ -13,12 +13,15 @@ n_sample="6"
 main_path="./test_results/OURS"
 dataset_path="./generated_datasets"
 
+## template number ##
+template="template6"
+
 for seed in $seeds; do
 python openai_generated_main.py \
     --task_name $task \
     --model_name_or_path $main_model \
-    --output_dir $main_path/$task/$main_model/template3/minimal/balanced/ \
-    --dataset_dir $dataset_path/$task/$main_model/template3/$seed/ \
+    --output_dir $main_path/$task/$main_model/$template/minimal/balanced/ \
+    --dataset_dir $dataset_path/$task/$main_model/$template/$seed/ \
     --overwrite_output_dir \
     --seed $seed \
     --n_samples $n_sample \
@@ -27,24 +30,20 @@ python openai_generated_main.py \
     --infix '
 ' \
     --postfix ''
+done
+
+# for seed in $seeds; do
+# python openai_generated_main.py \
+#     --task_name $task \
+#     --model_name_or_path $main_model \
+#     --output_dir $main_path/$task/$main_model/template3/manual/balanced/ \
+#     --dataset_dir $dataset_path/$task/$main_model/template3/$seed/ \
+#     --overwrite_output_dir \
+#     --seed $seed \
+#     --n_samples $n_sample \
+#     --balance_sample \
 #     --prefix 'Question: ' \
 #     --infix '
 # Type:' \
 #     --postfix ''
-done
-
-for seed in $seeds; do
-python openai_generated_main.py \
-    --task_name $task \
-    --model_name_or_path $main_model \
-    --output_dir $main_path/$task/$main_model/template3/manual/balanced/ \
-    --dataset_dir $dataset_path/$task/$main_model/template3/$seed/ \
-    --overwrite_output_dir \
-    --seed $seed \
-    --n_samples $n_sample \
-    --balance_sample \
-    --prefix 'Question: ' \
-    --infix '
-Type:' \
-    --postfix ''
-done
+# done

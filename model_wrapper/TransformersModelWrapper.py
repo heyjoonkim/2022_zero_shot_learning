@@ -121,7 +121,7 @@ class GPT2Wrapper(torch.nn.Module):
         else:
             # tokenize label specific input sentence 
             tokenized_inputs = self.tokenizer(input_sentence, return_tensors='pt').to(self.transformer.device)
-            print('input ids', len(tokenized_inputs['input_ids']))
+            # print('input ids', len(tokenized_inputs['input_ids']))
 
             outputs = self.transformer(**tokenized_inputs)
 

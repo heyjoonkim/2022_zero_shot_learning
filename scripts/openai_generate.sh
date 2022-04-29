@@ -21,7 +21,7 @@ for seed in $seeds; do
 python openai_generate.py \
     --task_name $task \
     --benchmark_name $benchmark \
-    --output_dir $main_path/$task/$main_model/template3/$seed/ \
+    --output_dir $main_path/$task/$main_model/template6/$seed/ \
     --model_name_or_path $main_model \
     --overwrite_output_dir \
     --seed $seed \
@@ -31,10 +31,10 @@ python openai_generate.py \
     --frequency_penalty $frequency_penalty \
     --label_token '[LABEL]' \
     --input_label_token '[INPUT_LABEL]' \
-    --prefix 'Generate a question about
-"[INPUT_LABEL]" : ' \
+    --prefix 'Sample question : ' \
     --infix '
-Generate a question about
-"[LABEL]" :' \
+Generate a "[LABEL]" question :' \
     --postfix ''
 done
+
+sh scripts/openai_few_shot_trec.sh

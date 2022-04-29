@@ -13,7 +13,7 @@ export CUDA_VISIBLE_DEVICES=3
 # task="yahoo"
 # task="yelp"
 task='trec'
-# benchmark="huggingface"
+benchmark="huggingface"
 
 ## MODELS ##
 # main_model="gpt2-xl"
@@ -25,38 +25,18 @@ main_model="EleutherAI/gpt-j-6B"
 main_path="./test_results/OURS"
 dataset_path="./generated_datasets"
 
+## template number ##
+template="template6"
+
 ##############
 ## FEW-SHOT ##
 ##############
 
-seeds="1 2 3 4 5 6 7 8 9 10"
-# 3 7
-# seeds="3 7"
-# seeds="7"
-# n_samples="1 2 4 8 16"
-n_samples="16"
-# n_samples="6"
+# seeds="1 2 3 4 5 6 7 8 9 10"
+seeds="1 2 3 4 5"
 
-# # Manual template #
-# for n_sample in $n_samples; do
-#     for seed in $seeds; do
-# deepspeed transformers_generated_main.py \
-#     --task_name $task \
-#     --model_name_or_path $main_model \
-#     --ds_config ds_configs/fp16.json \
-#     --output_dir $main_path/$task/$main_model/template3/manual/balanced/ \
-#     --dataset_dir $dataset_path/$task/$main_model/template3/$seed/ \
-#     --seed $seed \
-#     --n_samples $n_sample \
-#     --balance_sample \
-#     --overwrite_output_dir \
-#     --prefix 'Question: ' \
-#     --infix '
-# Type:' \
-#     --postfix ''
-#     done
-# done
-# # Manual template #
+n_samples="1 2 4 8 16"
+# n_samples="4 8 16"
 
 # Manual template #
 for n_sample in $n_samples; do
@@ -64,11 +44,13 @@ for n_sample in $n_samples; do
 deepspeed transformers_generated_main.py \
     --task_name $task \
     --model_name_or_path $main_model \
+    --benchmark_name $benchmark \
     --ds_config ds_configs/fp16.json \
-    --output_dir $main_path/$task/$main_model/template3/manual/random/ \
-    --dataset_dir $dataset_path/$task/$main_model/template3/$seed/ \
+    --output_dir $main_path/$task/$main_model/$template/manual/balanced/ \
+    --dataset_dir $dataset_path/$task/$main_model/$template/$seed/ \
     --seed $seed \
     --n_samples $n_sample \
+    --balance_sample \
     --overwrite_output_dir \
     --prefix 'Question: ' \
     --infix '
@@ -78,31 +60,52 @@ Type:' \
 done
 # Manual template #
 
-
-
-
-
-
-# # Minimal template #
+# Manual template #
 # for n_sample in $n_samples; do
 #     for seed in $seeds; do
 # deepspeed transformers_generated_main.py \
 #     --task_name $task \
 #     --model_name_or_path $main_model \
 #     --ds_config ds_configs/fp16.json \
-#     --output_dir $main_path/$task/$main_model/template3/minimal/balanced/ \
-#     --dataset_dir $dataset_path/$task/$main_model/template3/$seed/ \
+#     --output_dir $main_path/$task/$main_model/$template/manual/random/ \
+#     --dataset_dir $dataset_path/$task/$main_model/$template/$seed/ \
 #     --seed $seed \
 #     --n_samples $n_sample \
-#     --balance_sample \
 #     --overwrite_output_dir \
-#     --prefix '' \
+#     --prefix 'Question: ' \
 #     --infix '
-# ' \
+# Type:' \
 #     --postfix ''
 #     done
 # done
-# # Minimal template #
+# Manual template #
+
+
+
+
+
+
+# Minimal template #
+for n_sample in $n_samples; do
+    for seed in $seeds; do
+deepspeed transformers_generated_main.py \
+    --task_name $task \
+    --model_name_or_path $main_model \
+    --benchmark_name $benchmark \
+    --ds_config ds_configs/fp16.json \
+    --output_dir $main_path/$task/$main_model/$template/minimal/balanced/ \
+    --dataset_dir $dataset_path/$task/$main_model/$template/$seed/ \
+    --seed $seed \
+    --n_samples $n_sample \
+    --balance_sample \
+    --overwrite_output_dir \
+    --prefix '' \
+    --infix '
+' \
+    --postfix ''
+    done
+done
+# Minimal template #
 
 # # Minimal template #
 # for n_sample in $n_samples; do

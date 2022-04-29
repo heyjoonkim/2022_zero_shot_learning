@@ -21,8 +21,8 @@ main_model="EleutherAI/gpt-j-6B"
 main_path="./generated_datasets"
 
 
-# seeds="1 2 3 4 5 6 8 9 10"
-seeds="7"
+seeds="1 2 3 4 5"
+# seeds="1"
 
 for seed in $seeds; do
     deepspeed transformers_generate.py \
@@ -30,7 +30,7 @@ for seed in $seeds; do
         --model_name_or_path $main_model \
         --benchmark_name $benchmark \
         --ds_config ds_configs/fp16.json \
-        --output_dir $main_path/$task/$main_model/template3/$seed/ \
+        --output_dir $main_path/$task/$main_model/template6/$seed/ \
         --seed $seed \
         --n_samples 16 \
         --overwrite_output_dir \
@@ -40,13 +40,11 @@ for seed in $seeds; do
         --no_repeat_ngram_size 2 \
         --label_token '[LABEL]' \
         --input_label_token '[INPUT_LABEL]' \
-    --prefix 'Generate a question about
-"[INPUT_LABEL]" : ' \
+    --prefix 'Sample question : ' \
     --infix '
-Generate a question about
-"[LABEL]" :' \
+Generate a "[LABEL]" question :' \
     --postfix ''
 done
 
         # --benchmark_name $benchmark \
-sh scripts/transformers_generated_few_shot.sh
+sh scripts/transformers_generated_few_shot_trec.sh
