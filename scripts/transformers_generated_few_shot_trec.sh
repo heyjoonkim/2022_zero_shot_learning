@@ -1,17 +1,6 @@
 export CUDA_VISIBLE_DEVICES=3
 
 ## TASKS ##
-# task="sst2"
-# task="rte"
-# benchmark="glue"
-
-# task="cb"
-# benchmark="super_glue"
-
-# task="sst5"
-# task="agnews"
-# task="yahoo"
-# task="yelp"
 task='trec'
 benchmark="huggingface"
 
@@ -26,13 +15,11 @@ main_path="./test_results/OURS"
 dataset_path="./generated_datasets"
 
 ## template number ##
-template="template6"
+template="template7"
 
 ##############
 ## FEW-SHOT ##
 ##############
-
-# seeds="1 2 3 4 5 6 7 8 9 10"
 seeds="1 2 3 4 5"
 
 n_samples="1 2 4 8 16"

@@ -1,4 +1,4 @@
-""" Finetuning a 🤗 Transformers model for sequence classification on GLUE."""
+
 import argparse
 import logging
 import os
@@ -13,7 +13,6 @@ from tqdm.auto import tqdm
 import transformers
 from transformers.deepspeed import HfDeepSpeedConfig
 from transformers import (
-    AdamW,
     AutoConfig,
     AutoTokenizer,
     set_seed,
@@ -218,11 +217,6 @@ def main():
         for split, dataset in raw_datasets.items():
             logger.info(f'{split} > {len(dataset)}')
     
-    # if args.local_rank == 0:
-    #     # Log a few random samples from the training set:
-    #     for index in random.sample(range(len(raw_eval_dataset)), 1):
-    #         logger.info(f"Sample {index} of the training set: {raw_eval_dataset[index]}.")
-    
     # Labels
     if args.task_name in generated_task_to_path:
         label_list = set(raw_datasets["validation"]['label'])
@@ -244,17 +238,17 @@ def main():
         pad_token_id=tokenizer.unk_token_id
     )
 
-    # TODO : fix?
-    if args.is_zero3:
-        with deepspeed.zero.Init(config_dict_or_path=args.ds_config):
-            model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer)
-    else:
-        model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer)
+    model_loading_start = time.time()
+    model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer)
+    model_loading_end = time.time()
+    logger.info(f'Total time for loading model : {model_loading_end - model_loading_start}')
 
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
 
-
+    # load generated in-context samples
+    # full_train_samples_list : all in-context samples -> for random sampling
+    # label2samples_list      : in-context samples for each label -> for balanced sampling
     label2samples_list, full_train_samples_list = prepare_generated_incontext_sampling(
         generated_samples=raw_datasets['validation'],
         verbalizer=args.verbalizer,
@@ -303,31 +297,23 @@ def main():
                 raise NotImplementedError
             return result
 
-    if args.local_rank != 0:
-        torch.distributed.barrier()
     processed_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
         remove_columns=raw_datasets["validation"].column_names,
-        desc="Running tokenizer on dataset",
+        desc="Preprocessing datasets...",
     )
-    if args.local_rank == 0:
-        torch.distributed.barrier()
 
     eval_dataset = processed_datasets["validation"]
 
     # Get the metric function  
-    # metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
-    
     if args.benchmark_name == 'huggingface':
         metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
     else:
         metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
     
-
+    # deepspeed initialize
     model_engine, _, _, _ = deepspeed.initialize(model=model, optimizer=None, lr_scheduler=None, config_params=args.ds_config)
-
-    
 
     # Evaluate! 
     if args.local_rank == 0:
@@ -339,22 +325,20 @@ def main():
         logger.info(f"  K = {args.n_samples}")
         logger.info(f"  Inference Model = {args.model_name_or_path}")
          
-    
     # for analysis
     prediction_dict = {}
 
     start_time = time.time()
     model_engine.eval()
 
-
+    # prepend prompt to explicitly show label space 
     if args.explicit_label_space:
         labels = list(args.verbalizer.keys())
         labels = ' '.join(labels)
         label_space = 'Types:' + labels
 
-
+    # evaluate
     for step, inputs in tqdm(enumerate(eval_dataset), disable=(args.local_rank != 0)):
-
 
         # in-context samples generated conditioned by the input x.
         if args.n_samples > 0:
@@ -364,23 +348,25 @@ def main():
                 k=args.n_samples,
                 balance_sample=args.balance_sample,
             )
+            # prepend in-context samples
             inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
         
-        # show all label space tokens
+        # show all label space tokens (NOT USED FOR NOW)
         if args.explicit_label_space:
             inputs['input_sentence'] = label_space + sep + inputs['input_sentence']
 
         label = torch.tensor(inputs['labels']).to(model_engine.device).unsqueeze(dim=0)
 
+        # prediction  : predicted label index
+        # predictions : logit values for each label
         prediction, predictions = model(**inputs)
-        # print(f'label {label} <-> prediction {prediction}')
         
         metric.add_batch(
             predictions=prediction,
             references=label,
         )
 
-
+        # for analysis : save predictions
         prediction = prediction.cpu().item()
         prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
 
@@ -395,6 +381,7 @@ def main():
 
     end_time = time.time()
     logger.info(f'Total time : {end_time - start_time} sec.')
+    logger.info("Done.")
                 
 if __name__ == "__main__":
     logger.info('\nStart.')

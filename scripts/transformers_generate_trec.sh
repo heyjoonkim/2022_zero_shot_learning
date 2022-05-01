@@ -1,16 +1,5 @@
 export CUDA_VISIBLE_DEVICES=3
 
-# task="sst2"
-# task="rte"
-# benchmark="glue"
-
-# task="cb"
-# benchmark="super_glue"
-
-# task="sst5"
-# task="agnews"
-# task="yahoo"
-# task="yelp"
 task='trec'
 benchmark="huggingface"
 
@@ -18,9 +7,13 @@ benchmark="huggingface"
 # main_model="EleutherAI/gpt-neo-1.3B"
 # main_model="EleutherAI/gpt-neo-2.7B"
 main_model="EleutherAI/gpt-j-6B"
+
 main_path="./generated_datasets"
 
+## template number ##
+template="template7"
 
+## random seeds ##
 seeds="1 2 3 4 5"
 # seeds="1"
 
@@ -30,7 +23,7 @@ for seed in $seeds; do
         --model_name_or_path $main_model \
         --benchmark_name $benchmark \
         --ds_config ds_configs/fp16.json \
-        --output_dir $main_path/$task/$main_model/template6/$seed/ \
+        --output_dir $main_path/$task/$main_model/$template/$seed/ \
         --seed $seed \
         --n_samples 16 \
         --overwrite_output_dir \
@@ -40,11 +33,12 @@ for seed in $seeds; do
         --no_repeat_ngram_size 2 \
         --label_token '[LABEL]' \
         --input_label_token '[INPUT_LABEL]' \
-    --prefix 'Sample question : ' \
-    --infix '
-Generate a "[LABEL]" question :' \
-    --postfix ''
+        --prefix 'Generate a question about
+"[INPUT_LABEL]" : ' \
+        --infix '
+Generate a question about
+"[LABEL]" :' \
+        --postfix ''
 done
 
-        # --benchmark_name $benchmark \
 sh scripts/transformers_generated_few_shot_trec.sh

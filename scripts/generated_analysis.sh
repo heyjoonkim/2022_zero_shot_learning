@@ -15,11 +15,11 @@ task='trec'
 # benchmark="huggingface"
 
 dataset_path="./generated_datasets"
+# 
+# main_model="EleutherAI/gpt-j-6B"
+main_model="text-davinci-002"
 
-main_model="EleutherAI/gpt-j-6B"
-# main_model="text-d1avinci-002"
-
-template="template6"
+template="template5"
 seeds="1"
 
 for seed in $seeds; do

@@ -14,7 +14,7 @@ main_path="./test_results/OURS"
 dataset_path="./generated_datasets"
 
 ## template number ##
-template="template6"
+template="template5"
 
 for seed in $seeds; do
 python openai_generated_main.py \

@@ -1,4 +1,3 @@
-""" Finetuning a 🤗 Transformers model for sequence classification on GLUE."""
 import argparse
 import logging
 import os
@@ -15,7 +14,6 @@ from transformers.deepspeed import HfDeepSpeedConfig
 from transformers import (
     AutoConfig,
     AutoTokenizer,
-    PretrainedConfig,
     set_seed,
 )
 import torch
@@ -248,20 +246,20 @@ def main():
     raw_datasets['train'] = raw_train_dataset
     raw_datasets['validation'] = raw_eval_dataset
 
+    # log dataset details
     if args.local_rank == 0:
         logger.info('TRAIN / VALIDATION split.')
         for split, dataset in raw_datasets.items():
             logger.info(f'{split} > {len(dataset)}')
     
-    if args.local_rank == 0:
-        # Log a few random samples from the training set:
-        for index in random.sample(range(len(raw_train_dataset)), 1):
-            logger.info(f"Sample {index} of the training set: {raw_train_dataset[index]}.")
+    # Log a few random samples from the training set:
+    for index in random.sample(range(len(raw_train_dataset)), 1):
+        logger.info(f"Sample {index} of the training set: {raw_train_dataset[index]}.")
     
     # Labels
     if args.task_name is not None and args.benchmark_name is not None:
         if args.benchmark_name == 'huggingface':
-            # TODO : fix?
+            # TODO : fix? only for TREC dataset
             label_list = raw_datasets["train"].features["label-coarse"].names
         else:
             # label_list : ['entailment', 'not_entailment']
@@ -288,13 +286,7 @@ def main():
     )
 
     model_loading_start = time.time()
-    # TODO : fix?
-    if args.is_zero3:
-        with deepspeed.zero.Init(config_dict_or_path=args.ds_config):
-            model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer)
-    else:
-        model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer)
-
+    model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer)
     model_loading_end = time.time()
     logger.info(f'Total time for loading model : {model_loading_end - model_loading_start}')
 
@@ -355,7 +347,7 @@ def main():
         preprocess_function,
         batched=True,
         remove_columns=raw_datasets["train"].column_names,
-        desc="Running tokenizer on dataset",
+        desc="Preprocessing datasets...",
     )
     if args.local_rank == 0:
         torch.distributed.barrier()

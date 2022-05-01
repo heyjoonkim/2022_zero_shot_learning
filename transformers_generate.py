@@ -1,4 +1,3 @@
-""" Finetuning a 🤗 Transformers model for sequence classification on GLUE."""
 import argparse
 import logging
 import os
@@ -293,12 +292,7 @@ def main():
         pad_token_id=tokenizer.unk_token_id
     )
 
-    # TODO : fix?
-    if args.is_zero3:
-        with deepspeed.zero.Init(config_dict_or_path=args.ds_config):
-            model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path)
-    else:
-        model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path)
+    model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path)
 
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
@@ -338,20 +332,20 @@ def main():
         preprocess_function,
         batched=True,
         remove_columns=raw_datasets["validation"].column_names,
-        desc="Running tokenizer on dataset",
+        desc="Preprocessing datasets...",
     )
     if args.local_rank == 0:
         torch.distributed.barrier()
 
     eval_dataset = processed_datasets["validation"]
 
-    if args.local_rank == 0:
-        # Log a few random samples from the training set:
-        for index in random.sample(range(len(eval_dataset)), 1):
-            logger.info(f"Sample {index} of the evaluation set:")
-            logger.info(f'{eval_dataset[index]}')
-    
 
+    # Log a few random samples from the training set:
+    for index in random.sample(range(len(eval_dataset)), 1):
+        logger.info(f"Sample {index} of the evaluation set:")
+        logger.info(f'{eval_dataset[index]}')
+    
+    # deepspeed initialization
     model_engine, _, _, _ = deepspeed.initialize(model=model, optimizer=None, lr_scheduler=None, config_params=args.ds_config)
     
     # Generate! 
@@ -376,28 +370,43 @@ def main():
     with open(generation_writer, 'w') as file_writer:
         tsv_writer = csv.writer(file_writer, delimiter='\t')
         for step, inputs in tqdm(enumerate(eval_dataset), disable=(args.local_rank != 0)):
-
+            # input sentences
             sentence1 = inputs['sentence1']
             sentence2 = inputs['sentence2'] if 'sentence2' in inputs else ''
-            label = inputs['labels']
-            input_label_token = args.label2token[label]
 
+            # original input with manually selected prompts
             original_input = args.prefix + sentence1 + args.infix + sentence2 + args.postfix
-            if args.input_label_token in original_input:
-                original_input = original_input.replace(args.input_label_token, input_label_token)
-            # print('original_input', original_input)
+            
+            # gold label for the input
+            label = inputs['labels']
 
-
+            # add label and input sentences to write in .tsv file
             row = [step, label, sentence1]
-
             if 'sentence2' in inputs:
                 row.append(sentence2)
             
+            # generate in-context samples for each label
             for index, (label_token, label) in enumerate(args.verbalizer.items()):
                 assert index == label, f'index {index} != label {label}'
+                # replace args.label_toke with label token
                 label_dependent_input = original_input.replace(args.label_token, label_token)
-                # print('label_dependent_input', label_dependent_input)
                 # print(len(label_dependent_input))
+
+                # replace args.input_label_token with random pseudo_input_label_token
+                # we select a random pseudo input label
+                filtered_label2token = args.label2token.copy()
+                assert label in filtered_label2token, f'{label} not in {filtered_label2token.keys()}'
+                # we remove the input label for selecting pseudo input label
+                # we do this to remove the bias while generating
+                filtered_label2token.pop(label)
+                # generate a random pseudo label for the input sentence
+                pseudo_label = random.randint(0, len(filtered_label2token) - 1)
+                pseudo_label = list(filtered_label2token.keys())[pseudo_label]
+                pseudo_input_label_token = filtered_label2token[pseudo_label]
+                # replace
+                if args.input_label_token in label_dependent_input:
+                    label_dependent_input = label_dependent_input.replace(args.input_label_token, pseudo_input_label_token)
+
                 l = len(label_dependent_input)
 
                 tokenized_inputs = tokenizer(label_dependent_input, return_tensors='pt').to(model_engine.device)
@@ -420,9 +429,9 @@ def main():
                 # list of length n_samples
                 generated_outputs = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
-                
                 generated_outputs = [genenerated_output[l:].replace('\n', '').strip() for genenerated_output in generated_outputs]
 
+                # print('=' * 50)
                 # for generated_output in generated_outputs:
                 #     print(generated_output)
                 
@@ -434,5 +443,5 @@ def main():
     logger.info(f'Total time : {end_time - start_time} sec.')
                 
 if __name__ == "__main__":
-    logger.info('\nStart.')
+    logger.info('\nRunning : transformers_generate.py')
     main()
