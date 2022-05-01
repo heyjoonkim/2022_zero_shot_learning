@@ -367,6 +367,12 @@ def main():
     model_engine.eval()
 
     generation_writer = os.path.join(args.output_dir, "test.tsv")
+    
+    # prevent from overwriting generated dataset
+    if os.path.isfile(generation_writer):
+        logger.info('Generated dataset already exists. Exit Program.')
+        exit()
+
     with open(generation_writer, 'w') as file_writer:
         tsv_writer = csv.writer(file_writer, delimiter='\t')
         for step, inputs in tqdm(enumerate(eval_dataset), disable=(args.local_rank != 0)):
