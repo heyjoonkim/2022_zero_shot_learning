@@ -341,25 +341,20 @@ def main():
                 raise NotImplementedError
             return result
 
-    if args.local_rank != 0:
-        torch.distributed.barrier()
     processed_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
         remove_columns=raw_datasets["train"].column_names,
         desc="Preprocessing datasets...",
     )
-    if args.local_rank == 0:
-        torch.distributed.barrier()
 
     train_dataset = processed_datasets["train"]
     eval_dataset = processed_datasets["validation"]
 
-    if args.local_rank == 0:
-        # Log a few random samples from the training set:
-        for index in random.sample(range(len(train_dataset)), 1):
-            logger.info(f"Sample {index} of the training set:")
-            logger.info(f'{train_dataset[index]}')
+    # Log a few random samples from the training set:
+    for index in random.sample(range(len(train_dataset)), 1):
+        logger.info(f"Sample {index} of the training set:")
+        logger.info(f'{train_dataset[index]}')
        
     # Get the metric function
     if args.task_name is not None and args.benchmark_name is not None:
@@ -370,6 +365,7 @@ def main():
     elif args.task_name is not None:
         metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
 
+    # deepspeed initialize
     model_engine, _, _, _ = deepspeed.initialize(model=model, optimizer=None, lr_scheduler=None, config_params=args.ds_config)
     
     # Evaluate! 
@@ -383,13 +379,14 @@ def main():
         logger.info(f"  K = {args.n_samples}")
         logger.info(f"  Inference Model = {args.model_name_or_path}")
          
-    
     # for analysis
     prediction_dict = {}
 
     start_time = time.time()
     model_engine.eval()
 
+    # we select a set of in-context samples
+    # and use it as the in-context sample for all test dataset.
     incontext_samples, sep = prepend_incontext_samples(
         label2samples=label2samples,
         full_train_samples=full_train_samples,
@@ -397,6 +394,7 @@ def main():
         balance_sample=args.balance_sample,
     )
 
+    # if args.explicit_label_space is True, prepend explicit prompt for providing label space informations
     if args.explicit_label_space:
         labels = list(args.verbalizer.keys())
         labels = ' '.join(labels)
@@ -406,12 +404,14 @@ def main():
     logger.info(f'=== in-context samples ===\n{incontext_samples}\n=====================')
         
     for step, inputs in tqdm(enumerate(eval_dataset), disable=(args.local_rank != 0)):
-
+        # prepend in-context samples
         if args.n_samples > 0:
             inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
             
         label = torch.tensor(inputs['labels']).to(model_engine.device).unsqueeze(dim=0)
 
+        # prediction  : predicted label index
+        # predictions : logit values for each label
         prediction, predictions = model(**inputs)
             
         metric.add_batch(
@@ -419,12 +419,12 @@ def main():
             references=label,
         )
 
+        # for analysis : save predictions
         prediction = prediction.cpu().item()
         prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
 
     eval_metric = metric.compute()
 
-    
     if args.n_samples == 0:
         logger.info(f"** Zero-shot evaluation result : {eval_metric}")
     else:
@@ -434,7 +434,12 @@ def main():
 
     end_time = time.time()
     logger.info(f'Total time : {end_time - start_time} sec.')
+    logger.info("Done.")
                 
 if __name__ == "__main__":
-    logger.info('\nStart.')
+    logger.info('\nRunning : transformers_main.py')
+    
+    start_time = time.time()
     main()
+    end_time = time.time()
+    logger.info(f'Total runtime : {end_time - start_time} sec.')

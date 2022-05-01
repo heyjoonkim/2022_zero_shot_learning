@@ -245,8 +245,12 @@ def main():
     logger.info(f'Result : {correct_count} / {len(eval_dataset)} = {result}%')
     
     end_time = time.time()
-    logger.info(f'Total time : {end_time - start_time}')
+    logger.info(f'Total task time : {end_time - start_time}')
 
 if __name__ == "__main__":
-    logger.info('\nStart.')
+    logger.info('\nRunning : openai_generated_main.py')
+    
+    start_time = time.time()
     main()
+    end_time = time.time()
+    logger.info(f'Total runtime : {end_time - start_time} sec.')

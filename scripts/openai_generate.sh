@@ -14,6 +14,8 @@ temperature="0.5"
 top_p="1"
 frequency_penalty="0"
 
+# template #
+template="template7"
 
 seeds="1" # 2 3 4 5"
 
@@ -21,7 +23,7 @@ for seed in $seeds; do
 python openai_generate.py \
     --task_name $task \
     --benchmark_name $benchmark \
-    --output_dir $main_path/$task/$main_model/template5/$seed/ \
+    --output_dir $main_path/$task/$main_model/$template/$seed/ \
     --model_name_or_path $main_model \
     --overwrite_output_dir \
     --seed $seed \
@@ -31,10 +33,12 @@ python openai_generate.py \
     --frequency_penalty $frequency_penalty \
     --label_token '[LABEL]' \
     --input_label_token '[INPUT_LABEL]' \
-    --prefix 'Generate a question : ' \
-    --infix '
-Generate a question about "[LABEL]" :' \
-    --postfix ''
+        --prefix 'Generate a question about
+"[INPUT_LABEL]" : ' \
+        --infix '
+Generate a question about
+"[LABEL]" :' \
+        --postfix ''
 done
 
 sh scripts/openai_generated_few_shot.sh

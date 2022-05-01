@@ -235,7 +235,6 @@ def main():
     
     start_time = time.time()
 
-    
     generation_writer = os.path.join(args.output_dir, "test.tsv")
     with open(generation_writer, "w") as file_writer:
         tsv_writer = csv.writer(file_writer, delimiter='\t')
@@ -243,23 +242,37 @@ def main():
             
             sentence1 = inputs['sentence1']
             sentence2 = inputs['sentence2'] if 'sentence2' in inputs else ''
-            label = inputs['labels']
-            input_label_token = args.label2token[label]
 
+            # original input with manually selected prompts
             original_input = args.prefix + sentence1 + args.infix + sentence2 + args.postfix
-            if args.input_label_token in original_input:
-                original_input = original_input.replace(args.input_label_token, input_label_token)
 
+            # gold label for the input
+            label = inputs['labels']
+
+            # add label and input sentences to write in .tsv file
             row = [step, label, sentence1]
-
             if 'sentence2' in inputs:
                 row.append(sentence2)
 
             for index, (label_token, label) in enumerate(args.verbalizer.items()):
                 assert index == label, f'index {index} != label {label}'
+                # replace args.label_toke with label token
                 label_dependent_input = original_input.replace(args.label_token, label_token)
-                l = len(label_dependent_input)
-
+                # replace args.input_label_token with random pseudo_input_label_token
+                # we select a random pseudo input label
+                filtered_label2token = args.label2token.copy()
+                assert label in filtered_label2token, f'{label} not in {filtered_label2token.keys()}'
+                # we remove the input label for selecting pseudo input label
+                # we do this to remove the bias while generating
+                filtered_label2token.pop(label)
+                # generate a random pseudo label for the input sentence
+                pseudo_label = random.randint(0, len(filtered_label2token) - 1)
+                pseudo_label = list(filtered_label2token.keys())[pseudo_label]
+                pseudo_input_label_token = filtered_label2token[pseudo_label]
+                # replace
+                if args.input_label_token in label_dependent_input:
+                    label_dependent_input = label_dependent_input.replace(args.input_label_token, pseudo_input_label_token)
+                
                 wrong_generation_count = 0
                 while True:
                     generated_text = model.generate(
@@ -274,10 +287,10 @@ def main():
                     generated_text = generated_text.strip().split('\n')[0].strip()
                     if len(generated_text) == 0:
                         wrong_generation_count += 1
-                        print(f'Nothing generated. Retry.... {wrong_generation_count}')
+                        logger.info(f'Nothing generated. Retry.... {wrong_generation_count}')
                         if wrong_generation_count >= 5:
-                            print("Cannot generate a sample for input :")
-                            print(label_dependent_input)
+                            logger.info("Cannot generate a sample for input :")
+                            logger.info(label_dependent_input)
                             break
                     else:
                         # to match the format from the transformers code
@@ -289,8 +302,12 @@ def main():
             tsv_writer.writerow(row)
         
     end_time = time.time()
-    logger.info(f'Total time : {end_time - start_time}')
+    logger.info(f'Total task time : {end_time - start_time}')
 
 if __name__ == "__main__":
-    logger.info('\nStart.')
+    logger.info('\nRunning : openai_generate.py')
+
+    start_time = time.time()
     main()
+    end_time = time.time()
+    logger.info(f'Total runtime : {end_time - start_time} sec.')

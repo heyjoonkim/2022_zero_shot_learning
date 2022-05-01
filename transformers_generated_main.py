@@ -384,5 +384,9 @@ def main():
     logger.info("Done.")
                 
 if __name__ == "__main__":
-    logger.info('\nStart.')
+    logger.info('\nRunning : transformers_generated_main.py')
+    
+    start_time = time.time()
     main()
+    end_time = time.time()
+    logger.info(f'Total runtime : {end_time - start_time} sec.')

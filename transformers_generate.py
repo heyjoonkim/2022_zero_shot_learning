@@ -444,4 +444,8 @@ def main():
                 
 if __name__ == "__main__":
     logger.info('\nRunning : transformers_generate.py')
+    
+    start_time = time.time()
     main()
+    end_time = time.time()
+    logger.info(f'Total runtime : {end_time - start_time} sec.')
