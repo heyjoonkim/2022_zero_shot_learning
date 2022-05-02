@@ -2,7 +2,6 @@
 import argparse
 import logging
 import os
-import random
 import json
 import time
 
@@ -10,10 +9,7 @@ import datasets
 from datasets import DatasetDict, Dataset
 from tqdm.auto import tqdm
 
-import transformers
-from transformers.deepspeed import HfDeepSpeedConfig
 import torch
-import deepspeed
 
 from dataset_utils import generated_task_to_path, task_to_keys, task_to_verbalizer, prepare_generated_incontext_sampling
 
@@ -96,9 +92,6 @@ def parse_args():
 
 def main():
     args = parse_args()
-    dschf = HfDeepSpeedConfig(args.ds_config)
-    deepspeed.init_distributed()
-    args.world_size = torch.distributed.get_world_size()
 
     # Make one log on every process with the configuration for debugging.
     logging.basicConfig(
@@ -112,13 +105,6 @@ def main():
 
     args.verbalizer = task_to_verbalizer.get(args.task_name)
     args.label2token = {v:k for k,v in args.verbalizer.items()}
-
-    if args.local_rank == 0:
-        datasets.utils.logging.set_verbosity_warning()
-        transformers.utils.logging.set_verbosity_info()
-    else:
-        datasets.utils.logging.set_verbosity_error()
-        transformers.utils.logging.set_verbosity_error()
 
     # In distributed training, the load_dataset function guarantee that only one local process can concurrently
     # download the dataset.
@@ -190,16 +176,12 @@ def main():
                 raise NotImplementedError
             return result
 
-    if args.local_rank != 0:
-        torch.distributed.barrier()
     processed_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
         remove_columns=raw_datasets["validation"].column_names,
         desc="Running tokenizer on dataset",
     )
-    if args.local_rank == 0:
-        torch.distributed.barrier()
 
     eval_dataset = processed_datasets["validation"]
 
