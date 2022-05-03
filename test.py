@@ -206,8 +206,8 @@ def main():
         return result
 
     processed_datasets = datasets.map(
-        rte_preprocess,
-        batched=False,
+        preprocess_function,
+        batched=True,
         remove_columns=datasets["train"].column_names,
         desc="Preparing dataset",
     )
@@ -265,11 +265,11 @@ def main():
         pos_indices = []
         neg_indices = []
         for _ in range(6):
-            no_indices.append(random.randint(0, no_dataset-1))
+            no_indices.append(random.randint(0, len(no_dataset)-1))
         for _ in range(5):
-            pos_indices.append(random.randint(0, pos_dataset-1))
-            neg_indices.append(random.randint(0, neg_dataset-1))
-        for idx in range(5)
+            pos_indices.append(random.randint(0, len(pos_dataset)-1))
+            neg_indices.append(random.randint(0, len(neg_dataset)-1))
+        for idx in range(5):
             no_sample = no_dataset[no_indices[idx]]
             no_sample_input_sentence = no_sample['input_sentence']
             # A% demo accuracy

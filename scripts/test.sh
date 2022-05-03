@@ -7,7 +7,7 @@ samples="16"
 for n_sample in $samples; do
     for seed in $seeds; do
         for acc in $accs; do
-            python openai_main.py \
+            python test.py \
             --task_name $task \
             --model_name_or_path $main_model \
             --output_dir outputs/$task/gpt-j/balanced/$n_sample-shot/acc-$acc/seed-$seed \
