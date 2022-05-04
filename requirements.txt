@@ -6,3 +6,4 @@ torch
 scipy
 sklearn
 tensorboard
+sentence_transformers
