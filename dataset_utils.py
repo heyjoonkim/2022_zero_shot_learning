@@ -240,11 +240,11 @@ def generated_trec_generate_dataset_dict(filename):
             samples4 = ast.literal_eval(line[7])
             samples5 = ast.literal_eval(line[8])
 
-            assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
-            assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
-            assert len(samples0) == len(samples3), f'number samples for label 0 {samples0} does not match the number of samples for label 3 {len(samples3)}'
-            assert len(samples0) == len(samples4), f'number samples for label 0 {samples0} does not match the number of samples for label 4 {len(samples4)}'
-            assert len(samples0) == len(samples5), f'number samples for label 0 {samples0} does not match the number of samples for label 5 {len(samples5)}'
+            # assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
+            # assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
+            # assert len(samples0) == len(samples3), f'number samples for label 0 {samples0} does not match the number of samples for label 3 {len(samples3)}'
+            # assert len(samples0) == len(samples4), f'number samples for label 0 {samples0} does not match the number of samples for label 4 {len(samples4)}'
+            # assert len(samples0) == len(samples5), f'number samples for label 0 {samples0} does not match the number of samples for label 5 {len(samples5)}'
 
             label_list.append(label)
             sentence1_list.append(sentence1)
@@ -296,10 +296,10 @@ def generated_sst5_generate_dataset_dict(filename):
             samples3 = ast.literal_eval(line[6])
             samples4 = ast.literal_eval(line[7])
 
-            assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
-            assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
-            assert len(samples0) == len(samples3), f'number samples for label 0 {samples0} does not match the number of samples for label 3 {len(samples3)}'
-            assert len(samples0) == len(samples4), f'number samples for label 0 {samples0} does not match the number of samples for label 4 {len(samples4)}'
+            # assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
+            # assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
+            # assert len(samples0) == len(samples3), f'number samples for label 0 {samples0} does not match the number of samples for label 3 {len(samples3)}'
+            # assert len(samples0) == len(samples4), f'number samples for label 0 {samples0} does not match the number of samples for label 4 {len(samples4)}'
             
             label_list.append(label)
             sentence1_list.append(sentence1)
@@ -347,8 +347,8 @@ def generated_cb_generate_dataset_dict(filename):
             samples1 = ast.literal_eval(line[5])
             samples2 = ast.literal_eval(line[6])
 
-            assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
-            assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
+            # assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
+            # assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
            
             label_list.append(label)
             sentence1_list.append(sentence1)
@@ -589,10 +589,11 @@ def prepend_incontext_samples(
                 if total_count == k:
                     return final_sentence, sep
     else:
-        total_length = len(full_train_samples)
+        full_train_samples_copy = full_train_samples.copy()
         for index in range(k):
+            total_length = len(full_train_samples_copy)
             random_index = random.randint(0, total_length-1)
-            selected_sample = full_train_samples[random_index]
+            selected_sample = full_train_samples_copy.pop(random_index)
 
             if final_sentence is None:
                 final_sentence = selected_sample

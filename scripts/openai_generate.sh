@@ -15,7 +15,7 @@ top_p="1"
 frequency_penalty="0"
 
 # template #
-template="template7"
+template="template10"
 
 seeds="1" # 2 3 4 5"
 
@@ -36,7 +36,7 @@ python openai_generate.py \
         --prefix 'Generate a question about
 "[INPUT_LABEL]" : ' \
         --infix '
-Generate a question about
+Generate a different question about
 "[LABEL]" :' \
         --postfix ''
 done

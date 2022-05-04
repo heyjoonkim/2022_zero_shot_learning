@@ -11,7 +11,7 @@ main_model="EleutherAI/gpt-j-6B"
 main_path="./generated_datasets"
 
 ## template number ##
-template="template7"
+template="template11"
 
 ## random seeds ##
 seeds="1 2 3 4 5"
@@ -34,11 +34,13 @@ for seed in $seeds; do
         --label_token '[LABEL]' \
         --input_label_token '[INPUT_LABEL]' \
         --prefix 'Generate a question about
-"[INPUT_LABEL]" : ' \
-        --infix '
-Generate a question about
 "[LABEL]" :' \
+        --infix '' \
         --postfix ''
 done
 
 sh scripts/transformers_generated_few_shot_trec.sh
+
+
+
+        # --apply_input \

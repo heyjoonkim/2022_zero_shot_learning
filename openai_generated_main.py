@@ -237,6 +237,13 @@ def main():
             inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
          
         label = inputs['labels']
+
+        # logging first sample
+        if step == 0:
+            logger.info('LOGGING FIRST GENERATED SAMPLE.')
+            logger.info(f'LABEL : {label}')
+            logger.info(f'INPUT SENTENCE : {inputs["input_sentence"]}')
+
         prediction, results_dict = model.forward(**inputs)
 
         if prediction == label:

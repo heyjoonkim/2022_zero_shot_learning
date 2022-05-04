@@ -15,15 +15,15 @@ main_path="./test_results/OURS"
 dataset_path="./generated_datasets"
 
 ## template number ##
-template="template7"
+template="template11"
 
 ##############
 ## FEW-SHOT ##
 ##############
 seeds="1 2 3 4 5"
 
-n_samples="1 2 4 8 16"
-# n_samples="4 8 16"
+n_samples="1 2 4 6 8 16"
+# n_samples="6"
 
 # Manual template #
 for n_sample in $n_samples; do
@@ -39,6 +39,7 @@ deepspeed transformers_generated_main.py \
     --n_samples $n_sample \
     --balance_sample \
     --overwrite_output_dir \
+    --apply_input \
     --prefix 'Question: ' \
     --infix '
 Type:' \
@@ -59,6 +60,7 @@ done
 #     --seed $seed \
 #     --n_samples $n_sample \
 #     --overwrite_output_dir \
+#     --apply_input \
 #     --prefix 'Question: ' \
 #     --infix '
 # Type:' \
@@ -86,6 +88,7 @@ deepspeed transformers_generated_main.py \
     --n_samples $n_sample \
     --balance_sample \
     --overwrite_output_dir \
+    --apply_input \
     --prefix '' \
     --infix '
 ' \
@@ -106,6 +109,7 @@ done
 #     --seed $seed \
 #     --n_samples $n_sample \
 #     --overwrite_output_dir \
+#     --apply_input \
 #     --prefix '' \
 #     --infix '
 # ' \

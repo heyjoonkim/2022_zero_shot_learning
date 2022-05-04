@@ -114,6 +114,12 @@ def parse_args():
         default="[INPUT_LABEL]", 
         help="The place of the label for the input sentence."
     )
+    parser.add_argument(
+        '--apply_input', 
+        default=False, 
+        action="store_true",
+        help='Apply input sentence.'
+    )
     # until here #
 
     args = parser.parse_args()
@@ -246,7 +252,7 @@ def main():
         tsv_writer = csv.writer(file_writer, delimiter='\t')
         for step, inputs in tqdm(enumerate(eval_dataset)):
             
-            sentence1 = inputs['sentence1']
+            sentence1 = inputs['sentence1'] if args.apply_input else ''
             sentence2 = inputs['sentence2'] if 'sentence2' in inputs else ''
 
             # original input with manually selected prompts

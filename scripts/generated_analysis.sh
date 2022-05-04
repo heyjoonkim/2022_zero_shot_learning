@@ -24,7 +24,7 @@ seeds="1"
 
 for seed in $seeds; do
 
-deepspeed generated_analysis.py \
+python generated_analysis.py \
     --task_name $task \
     --ds_config ds_configs/fp16.json \
     --dataset_dir $dataset_path/$task/$main_model/$template/$seed/ \

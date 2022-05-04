@@ -357,6 +357,12 @@ def main():
 
         label = torch.tensor(inputs['labels']).to(model_engine.device).unsqueeze(dim=0)
 
+        # logging first sample
+        if step == 0:
+            logger.info('LOGGING FIRST GENERATED SAMPLE.')
+            logger.info(f'LABEL : {label}')
+            logger.info(f'INPUT SENTENCE : {inputs["input_sentence"]}')
+
         # prediction  : predicted label index
         # predictions : logit values for each label
         prediction, predictions = model(**inputs)
