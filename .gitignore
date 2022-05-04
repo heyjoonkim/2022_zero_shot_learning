@@ -1,6 +1,7 @@
 outputs/*
 # scripts/*
 generated_datasets/*
+retrieved_datasets/*
 tmp/*
 tmp*
 test_results/*
