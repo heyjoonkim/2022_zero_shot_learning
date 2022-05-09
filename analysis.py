@@ -18,11 +18,8 @@
 
 import argparse
 import logging
-import os
 import sys
 import time
-import csv
-import random
 
 from tqdm.auto import tqdm
 from datasets import load_dataset, Dataset, DatasetDict
@@ -38,10 +35,23 @@ def parse_args():
         "--task_name",
         type=str,
         default=None,
-        help="The name of the glue task to train on.",
+        help="The name of task to analyze.",
         choices=list(task_to_keys.keys()),
     )
-    
+    parser.add_argument(
+        "--split",
+        type=str,
+        default='train',
+        help="The name of split."
+    )
+    parser.add_argument(
+        "--benchmark_name",
+        type=str,
+        default=None,
+        help="The name of the benchmark to train on.",
+        choices=['glue', 'super_glue', 'huggingface'],
+    )
+
     args = parser.parse_args()
     
     return args
@@ -61,29 +71,28 @@ def main():
     logger.setLevel(logging.INFO)
 
     if args.task_name is not None and args.task_name not in task_to_path:
+        logger.info(f'Loading from Huggingface Datasets : {args.task_name}')
         # Downloading and loading a dataset from the hub.
         # datasets = load_dataset("glue", args.task_name)
-        datasets = load_dataset(args.task_name)
+        if args.benchmark_name in ['glue', 'super_glue']:
+            datasets = load_dataset(args.benchmark_name, args.task_name)
+        else:
+            datasets = load_dataset(args.task_name, split=args.split)
     else:
+        logger.info(f'Loading from File : {args.task_name}')
         datasets = DatasetDict()
         dataset_processor = task_to_path[args.task_name]["dataset_processor"]
-        train_file_path = task_to_path[args.task_name]["train"]
-        validation_file_path = task_to_path[args.task_name]["validation"]
+        train_file_path = task_to_path[args.task_name][args.split]
 
         # train set
         train_dict = dataset_processor(train_file_path)
         raw_train_dataset = Dataset.from_dict(train_dict)
-        # validation set
-        validation_dict = dataset_processor(validation_file_path)
-        raw_eval_dataset = Dataset.from_dict(validation_dict)
 
-        datasets['train'] = raw_train_dataset
-        datasets['validation'] = raw_eval_dataset
+        datasets[args.split] = raw_train_dataset
 
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
     
-
     def preprocess_function(examples):
         # Tokenize the texts
         texts = (
@@ -119,26 +128,13 @@ def main():
     processed_datasets = datasets.map(
         preprocess_function,
         batched=True,
-        remove_columns=datasets["train"].column_names,
+        remove_columns=datasets[args.split].column_names,
         desc="Preparing dataset",
     )
 
-    if "train" not in processed_datasets:
-        raise ValueError("--do_train requires a train dataset")
-    train_dataset = processed_datasets["train"]
+    dataset = processed_datasets[args.split]
 
-    if args.task_name == "mnli":
-        eval_dataset = processed_datasets["validation_mismatched"]
-        eval_dataset_mm = processed_datasets["validation_matched"]
-    else:
-        if 'validation' in processed_datasets:
-            eval_dataset = processed_datasets["validation"]
-        elif 'test' in processed_datasets:
-            eval_dataset = processed_datasets["test"]
-        
-    
-    logger.info(f'# TRAIN dataset : {len(train_dataset)}')
-    logger.info(f'# Eval  dataset : {len(eval_dataset)}')
+    logger.info(f'# {args.split} dataset : {len(dataset)}')
 
     logger.info('Loading tokenizer...')
     tokenizer = AutoTokenizer.from_pretrained('gpt2')
@@ -147,14 +143,18 @@ def main():
     start_time = time.time()
 
     total_input_sentence_length = 0
+    max_input_sentence_length = 0
+    min_input_sentence_length = float('inf')
+
     total_sentence1_length = 0
+    max_sentence1_length = 0
+    min_sentence1_length = float('inf')
     if sentence2_key is not None:
         total_sentence2_length = 0
-
+        max_sentence2_length = 0
+        min_sentence2_length = float('inf')
+    
     label2count = {}
-
-    # dataset = train_dataset
-    dataset = eval_dataset
 
     for index, inputs in tqdm(enumerate(dataset)):
 
@@ -169,26 +169,47 @@ def main():
         # total sentence length
         input_sentence_token_length = len(tokenizer(input_sentence)['input_ids'])
         total_input_sentence_length += input_sentence_token_length
+        if max_input_sentence_length < input_sentence_token_length:
+            max_input_sentence_length = input_sentence_token_length
+        if min_input_sentence_length > input_sentence_token_length:
+            min_input_sentence_length = input_sentence_token_length
 
         # sentence1 length
         input_sentence1_token_length = len(tokenizer(sentence1)['input_ids'])
         total_sentence1_length += input_sentence1_token_length
+        if max_sentence1_length < input_sentence1_token_length:
+            max_sentence1_length = input_sentence1_token_length
+        if min_sentence1_length > input_sentence1_token_length:
+            min_sentence1_length = input_sentence1_token_length
         
         # sentence2 length (if any)
         if sentence2_key is not None:
             input_sentence2_token_length = len(tokenizer(sentence2)['input_ids'])
             total_sentence2_length += input_sentence2_token_length
+            if max_sentence2_length < input_sentence2_token_length:
+                max_sentence2_length = input_sentence2_token_length
+            if min_sentence2_length > input_sentence2_token_length:
+                min_sentence2_length = input_sentence2_token_length
 
         label2count[labels] = label2count.get(labels, 0) + 1 
 
         
     average_input_sentence_token_length = total_input_sentence_length / len(dataset)
-    logger.info(f'Average input token length : {average_input_sentence_token_length}')
+    logger.info(f'AVG input token length : {average_input_sentence_token_length}')
+    logger.info(f'MAX input token length : {max_input_sentence_length}')
+    logger.info(f'MIN input token length : {min_input_sentence_length}')
+    logger.info('\n\n')
     average_sentence1_token_length = total_sentence1_length / len(dataset)
-    logger.info(f'Average sentence1 token length : {average_sentence1_token_length}')
+    logger.info(f'AVG sentence1 token length : {average_sentence1_token_length}')
+    logger.info(f'MAX sentence1 token length : {max_sentence1_length}')
+    logger.info(f'MIN sentence1 token length : {min_sentence1_length}')
+    logger.info('\n\n')
     if sentence2_key is not None:
         average_sentence2_token_length = total_sentence2_length / len(dataset)
-        logger.info(f'Average sentence2 token length : {average_sentence2_token_length}')
+        logger.info(f'AVG sentence2 token length : {average_sentence2_token_length}')
+        logger.info(f'MAX sentence2 token length : {max_sentence2_length}')
+        logger.info(f'MIN sentence2 token length : {min_sentence2_length}')
+        logger.info('\n\n')
     logger.info(f'label split : {label2count}')
 
     end_time = time.time()
