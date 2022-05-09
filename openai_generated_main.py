@@ -243,6 +243,8 @@ def main():
             logger.info('LOGGING FIRST GENERATED SAMPLE.')
             logger.info(f'LABEL : {label}')
             logger.info(f'INPUT SENTENCE : {inputs["input_sentence"]}')
+        
+        # exit()
 
         prediction, results_dict = model.forward(**inputs)
 

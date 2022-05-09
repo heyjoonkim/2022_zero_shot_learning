@@ -25,8 +25,7 @@ template="retrieval"
 ##############
 seeds="1 2 3 4 5"
 
-n_samples="1 2 4 6 8 16"
-# n_samples="16 8 6 4 2 1"
+n_samples="1 2 4 5 8 16"
 
 # random labeled #
 # Manual template #
@@ -42,9 +41,9 @@ deepspeed transformers_generated_main.py \
     --seed $seed \
     --n_samples $n_sample \
     --overwrite_output_dir \
-    --prefix 'Question: ' \
+    --prefix 'Review: ' \
     --infix '
-Type:' \
+Sentiment:' \
     --postfix ''
     done
 done
@@ -86,9 +85,9 @@ deepspeed transformers_generated_main.py \
     --seed $seed \
     --n_samples $n_sample \
     --overwrite_output_dir \
-    --prefix 'Question: ' \
+    --prefix 'Review: ' \
     --infix '
-Type:' \
+Sentiment:' \
     --postfix ''
     done
 done

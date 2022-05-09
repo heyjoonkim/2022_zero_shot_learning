@@ -368,6 +368,42 @@ def generated_cb_generate_dataset_dict(filename):
 
     return return_dict
 
+def generated_sst2_generate_dataset_dict(filename):
+    sentence1_list = []
+    label_list = []
+    samples0_list = []
+    samples1_list = []
+
+    with open(filename) as f:
+        tsv_reader = csv.reader(f, delimiter='\t')
+        for line_index, line in enumerate(tsv_reader):
+
+            assert len(line) == 5, f'Line length {len(line)} does not match the expected length 5.'
+            
+            index = int(line[0])
+            label = int(line[1])
+            sentence1 = line[2]
+
+            assert line_index == index, f'index {index} != line_index {line_index}'
+
+            # convert to list
+            samples0 = ast.literal_eval(line[3])
+            samples1 = ast.literal_eval(line[4])
+            
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+            samples0_list.append(samples0)
+            samples1_list.append(samples1)
+
+    return_dict = {
+        'sentence' : sentence1_list,
+        'label' : label_list,
+        'samples0' : samples0_list,
+        'samples1' : samples1_list,
+    }
+
+    return return_dict
+
 # for using generated datasets.
 generated_task_to_path = {
     
@@ -379,10 +415,13 @@ generated_task_to_path = {
         "validation" : "test.tsv",
         "dataset_processor" : generated_sst5_generate_dataset_dict,
     },
-
     "cb" : {
         "validation" : "test.tsv",
         "dataset_processor" : generated_cb_generate_dataset_dict,
+    },
+    "sst2" : {
+        "validation" : "test.tsv",
+        "dataset_processor" : generated_sst2_generate_dataset_dict,
     },
 }
 
