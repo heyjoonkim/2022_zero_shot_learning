@@ -1,8 +1,33 @@
+# export CUDA_VISIBLE_DEVICES=0
+# main_model="EleutherAI/gpt-j-6B"
+# task="ag_news"
+# seeds="100"
+# accs="0 0.25 0.5 0.75 1"
+# samples="16"
+# for n_sample in $samples; do
+#     for seed in $seeds; do
+#         for acc in $accs; do
+#             python openai_main.py \
+#             --task_name $task \
+#             --model_name_or_path $main_model \
+#             --output_dir outputs/$task/gpt-j/no_prompt_space/$n_sample-shot/acc-$acc/seed-$seed \
+#             --seed $seed \
+#             --overwrite_output_dir \
+#             --n_samples $n_sample \
+#             --demo_accuracy $acc \
+#             --log_results \
+#     --prefix "Question: " \
+#     --postfix "
+# Type:"
+#         done
+#     done
+# done
+
 export CUDA_VISIBLE_DEVICES=0
-main_model="EleutherAI/gpt-j-6B"
+main_model="davinci"
 task="ag_news"
 seeds="100"
-accs="0 0.25 0.5 0.75 1"
+accs="1"
 samples="16"
 for n_sample in $samples; do
     for seed in $seeds; do
@@ -10,15 +35,14 @@ for n_sample in $samples; do
             python openai_main.py \
             --task_name $task \
             --model_name_or_path $main_model \
-            --output_dir outputs/$task/gpt-j/no_prompt_space/$n_sample-shot/acc-$acc/seed-$seed \
+            --output_dir outputs/$task/davinci/no_prompt_space/$n_sample-shot/acc-$acc/seed-$seed \
             --seed $seed \
             --overwrite_output_dir \
             --n_samples $n_sample \
             --demo_accuracy $acc \
             --log_results \
-    --prefix "Question: " \
-    --postfix "
-Type:"
+            --postfix "
+"
         done
     done
 done

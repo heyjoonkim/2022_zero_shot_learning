@@ -95,7 +95,7 @@ class ModelWrapper:
             logprobs = data['logprobs']
             token_logprobs = logprobs['token_logprobs']
 
-            loss = data['loss']
+            # loss = data['loss']
             # print(label_token, '->', [self.tokenizer.convert_tokens_to_string(self.tokenizer.convert_ids_to_tokens(token)) for token in label_token_input_ids])
             # print(label_token, '->', label_token_ids_length)
 
@@ -105,9 +105,9 @@ class ModelWrapper:
             for prob in label_probs:
                 label_prob += prob
 
-            # label_prob /= label_token_ids_length
+            label_prob /= label_token_ids_length
             # label_prob = token_logprobs[-1]
-            label_prob = -loss
+            # label_prob = -loss
 
             results_dict[label_token] = label_prob
 

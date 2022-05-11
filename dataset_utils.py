@@ -270,16 +270,20 @@ task_to_verbalizer = {
     "rte": {
         # " positive" : 0,  # entailment
         # " negative" : 1    # not entailment
-        # "entailment" : 0,  # entailment
-        # "not_entailment" : 1    # not entailment
+        "entailment" : 0,  # entailment
+        "not_entailment" : 1    # not entailment
         # " yes" : 0,  # entailment
         # " no" : 1    # not entailment
-        " True" : 0,  # entailment
-        " False" : 1    # not entailment
+        # " True" : 0,  # entailment
+        # " False" : 1    # not entailment
     },
     "sst2": {
-        " negative" : 0,
-        " positive" : 1,
+        " positive" : 0,
+        " negative" : 1,
+        # " negative" : 0,
+        # " positive" : 1,
+        # " 0" : 0,
+        # " 1" : 1,
         # "bad" : 0,
         # "good" : 1,
         # "terrible" : 0,
@@ -307,12 +311,18 @@ task_to_verbalizer = {
     "mpqa": None,
     "subj": None,
     "trec": {
-        " description" : 0,
-        " entity" : 1,
-        " expression" : 2,
-        " human" : 3,
-        " number": 4,
-        " location": 5
+        # " description" : 0,
+        # " entity" : 1,
+        # " expression" : 2,
+        # " human" : 3,
+        # " number": 4,
+        # " location": 5
+        " a" : 0,
+        " b" : 1,
+        " c" : 2,
+        " d" : 3,
+        " e": 4,
+        " f": 5
     },
     "ag_news": {
         " world" : 0,
@@ -355,8 +365,10 @@ task_to_verbalizer = {
     "hate": {
         # '\nnon-hate': 0,
         # '\nhate': 1,
-        ' positive': 0,
-        ' negative': 1
+        # ' positive': 0,
+        # ' negative': 1,
+        ' against': 0,
+        ' favor': 1
     },
     "sick": {
         # '\nnon-hate': 0,

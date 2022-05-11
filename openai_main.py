@@ -225,6 +225,8 @@ def main():
 
     if args.task_name == "ag_news":
         eval_dataset = eval_dataset.select(range(300))
+    # if args.task_name == "hate":
+    #     eval_dataset = eval_dataset.select(range(100))
 
     logger.info(f'# TRAIN dataset : {len(train_dataset)}')
     logger.info(f'# Eval  dataset : {len(eval_dataset)}')
@@ -267,7 +269,7 @@ def main():
             in_context_samples.append(random_sample_input_sentence)
         in_context_samples = '\n\n\n'.join(in_context_samples)
         logger.info(f'in context samples\n{in_context_samples}')
-        
+
     accs = []
     precisions = defaultdict(list)
     recalls = defaultdict(list)
