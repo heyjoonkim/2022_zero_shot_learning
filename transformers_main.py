@@ -13,6 +13,7 @@ from tqdm.auto import tqdm
 import transformers
 from transformers.deepspeed import HfDeepSpeedConfig
 from transformers import (
+    AdamW,
     AutoConfig,
     AutoTokenizer,
     set_seed,
@@ -255,7 +256,7 @@ def main():
     model_loading_start = time.time()
     model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer, ds_config=args.ds_config)
     model_loading_end = time.time()
-    logger.info(f'Total time for loading model : {model_loading_end - model_loading_start}')
+    logger.info(f'Total time for loading model : {model_loading_end - model_loading_start} sec.')
 
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
@@ -312,32 +313,39 @@ def main():
     # Get the metric function
     if args.task_name is not None and args.benchmark_name is not None:
         if args.benchmark_name == 'huggingface':
-            # metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
-            metric = load_metric("accuracy")
+            metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
         else:
-            # metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
-            metric = load_metric(args.benchmark_name, args.task_name)
+            metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
     elif args.task_name is not None:
-            # metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
-            metric = load_metric("accuracy")
+            metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
 
-    # deepspeed initialize
-    # model_engine, _, _, _ = deepspeed.initialize(model=model, optimizer=None, lr_scheduler=None, config_params=args.ds_config)
+    # TODO : remove?
+    # set optimizer
+    # we need to define an optimizer to use deepspeed 
+    optimizer = AdamW(model.parameters())
+    start_time = time.time()
+    # initialize deepspeed
+    model_engine, optimizer, _, _ = deepspeed.initialize(model=model, optimizer=optimizer, lr_scheduler=None, config_params=args.ds_config)
+    end_time = time.time()
+    logger.info(f'Total time for Deepspeed initialization : {end_time - start_time}')
+    model_engine.eval()
     
+    # we don't need an optimizer for inference, so we remove it just in case :)
+    del optimizer
+
     # Evaluate! 
     logger.info("***** Zero/Few-shot Evaluation *****")
     logger.info(f"  TASK                                = {args.task_name}")
     logger.info(f"  Num TRAIN examples                  = {len(train_dataset)}")
     logger.info(f"  Num EVAL  examples                  = {len(eval_dataset)}")
-    # logger.info(f"  Instantaneous batch size per device = {args.per_device_batch_size}")
-    # logger.info(f"  World Size                          = {args.world_size}")
+    logger.info(f"  Instantaneous batch size per device = {args.per_device_batch_size}")
+    logger.info(f"  World Size                          = {args.world_size}")
     logger.info(f"  Random Seed                         = {args.seed}")
     logger.info(f"  K                                   = {args.n_samples}")
     logger.info(f"  Inference Model                     = {args.model_name_or_path}")
          
     # for analysis
     prediction_dict = {}
-    # model_engine.eval()
 
     # TODO : parameter?
     # seperator for each demonstration samples
@@ -389,7 +397,7 @@ def main():
 
         # prediction  : predicted label index
         # predictions : logit values for each label
-        prediction, predictions = model(**inputs)
+        prediction, predictions = model_engine(**inputs)
         prediction = prediction.cpu()
             
         metric.add_batch(

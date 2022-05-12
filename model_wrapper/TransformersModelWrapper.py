@@ -4,7 +4,6 @@ import requests
 import time
 
 import torch
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
 import deepspeed
 
@@ -14,32 +13,28 @@ class GPT2Wrapper(torch.nn.Module):
     def __init__(self, config, model_name_or_path, verbalizer, ds_config):
         super(GPT2Wrapper, self).__init__()
 
-        device = torch.device("cuda")
-
         self.config = config
         self.max_length = config.n_positions
 
-        # inference url
-        self.url = "http://127.0.0.1:5000/inference"
-
-        # Main model
-        # load FP16
-        transformer = AutoModelForCausalLM.from_pretrained(
+        # Main model for inference
+        self.transformer = AutoModelForCausalLM.from_pretrained(
                                                             model_name_or_path,
                                                             from_tf=bool(".ckpt" in model_name_or_path),
                                                             config=config)
 
+        # TODO : remove?
         # set optimizer
         # we need to define an optimizer to use deepspeed 
-        optimizer = AdamW(transformer.parameters())
+        # optimizer = AdamW(transformer.parameters())
         # initialize deepspeed
-        self.transformer, optimizer, _, _ = deepspeed.initialize(model=transformer, optimizer=optimizer, lr_scheduler=None, config_params=ds_config)
-        print(type(optimizer))
-        del optimizer
+        # self.transformer, optimizer, _, _ = deepspeed.initialize(model=transformer, optimizer=optimizer, lr_scheduler=None, config_params=ds_config)
+        
+        # del optimizer
         # for zero/few-shot inference. 
         # No gradient updates
-        self.transformer.eval()
+        # self.transformer.eval()
 
+        # initialize tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
         self.num_labels = config.num_labels
@@ -57,7 +52,9 @@ class GPT2Wrapper(torch.nn.Module):
         ids_list = []
         multiple_token_flag = False
         for label_index in range(self.num_labels):
+            # index of the label -> label token from verbalizer
             token = label2token[label_index]
+            # tokenize verbalizer
             ids = tokenizer(token)['input_ids']
             print('> label_index', label_index, 'token', token, 'ids', ids)
             ids_list.append(ids)
@@ -81,9 +78,8 @@ class GPT2Wrapper(torch.nn.Module):
         logprobs,
         label_index=None,
     ):
+        # multiple token verbalizer
         if self.multiple_token_flag:
-            # multiple token verbalizer
-
             # shift log-probabilities
             logprobs = logprobs[:, :-1, :]
             label_tokens = self.ids_list[label_index]
@@ -157,12 +153,13 @@ class GPT2Wrapper(torch.nn.Module):
 
             outputs = self.transformer(**tokenized_inputs)
 
-            del tokenized_inputs
-            torch.cuda.empty_cache()
-                
             # shape : (1, length, vocab_size)
             logits = outputs.logits.cpu()
+
+            # empty cache
             del outputs
+            del tokenized_inputs
+            torch.cuda.empty_cache()
 
             probs = torch.softmax(logits.float(), dim=2)
             # shape : (1, length, vocab_size)
