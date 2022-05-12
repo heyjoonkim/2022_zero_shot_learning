@@ -128,21 +128,21 @@ def parse_args():
         raise NotImplementedError('Tasks for GLUE benchmarks are implemented yet.')
 
     # post init get batch and zero option from ds config
-    with open(args.ds_config, "r", encoding="utf-8") as ds_f:
-        ds_config = json.load(ds_f)
-    args.per_device_batch_size = ds_config['train_micro_batch_size_per_gpu']
-    args.gradient_accumulation_steps = ds_config['gradient_accumulation_steps']
-    if ds_config.get("zero_optimization"):
-        args.is_zero3 = ds_config["zero_optimization"]["stage"] == 3
-    else:
-        args.is_zero3 = False
+    # with open(args.ds_config, "r", encoding="utf-8") as ds_f:
+    #     ds_config = json.load(ds_f)
+    # args.per_device_batch_size = ds_config['train_micro_batch_size_per_gpu']
+    # args.gradient_accumulation_steps = ds_config['gradient_accumulation_steps']
+    # if ds_config.get("zero_optimization"):
+    #     args.is_zero3 = ds_config["zero_optimization"]["stage"] == 3
+    # else:
+    #     args.is_zero3 = False
 
     return args
 
 
 def main():
     args = parse_args()
-    dschf = HfDeepSpeedConfig(args.ds_config)
+    # dschf = HfDeepSpeedConfig(args.ds_config)
     deepspeed.init_distributed()
     args.world_size = torch.distributed.get_world_size()
 
@@ -186,8 +186,8 @@ def main():
         random.seed(args.seed)
 
     # Handle the repository creation & SummaryWriter
-    if args.local_rank == 0:
-        save_config(args)
+    # if args.local_rank == 0:
+    save_config(args)
 
     # In distributed training, the load_dataset function guarantee that only one local process can concurrently
     # download the dataset.
@@ -337,8 +337,8 @@ def main():
     logger.info(f"  TASK                                = {args.task_name}")
     logger.info(f"  Num TRAIN examples                  = {len(train_dataset)}")
     logger.info(f"  Num EVAL  examples                  = {len(eval_dataset)}")
-    logger.info(f"  Instantaneous batch size per device = {args.per_device_batch_size}")
-    logger.info(f"  World Size                          = {args.world_size}")
+    # logger.info(f"  Instantaneous batch size per device = {args.per_device_batch_size}")
+    # logger.info(f"  World Size                          = {args.world_size}")
     logger.info(f"  Random Seed                         = {args.seed}")
     logger.info(f"  K                                   = {args.n_samples}")
     logger.info(f"  Inference Model                     = {args.model_name_or_path}")
@@ -385,30 +385,29 @@ def main():
 
     logger.info(f'=== in-context samples ===\n{incontext_samples}\n=====================')
         
-    if args.local_rank == 0:
-        for step, inputs in tqdm(enumerate(eval_dataset)):
-            print(f'step : {step}')
-            # prepend in-context samples
-            if args.n_samples > 0:
-                inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
-                
-            label = torch.tensor(inputs['labels']).unsqueeze(dim=0)
+    for step, inputs in tqdm(enumerate(eval_dataset)):
+        print(f'step : {step}')
+        # prepend in-context samples
+        if args.n_samples > 0:
+            inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
+            
+        label = torch.tensor(inputs['labels']).unsqueeze(dim=0)
 
-            logger.info(f'INPUT SAMPLE INDEX : {step}\n{inputs["input_sentence"]}')
+        logger.info(f'INPUT SAMPLE INDEX : {step}\n{inputs["input_sentence"]}')
 
-            # prediction  : predicted label index
-            # predictions : logit values for each label
-            prediction, predictions = model(**inputs)
-            prediction = prediction.cpu()
-                
-            metric.add_batch(
-                predictions=prediction,
-                references=label,
-            )
+        # prediction  : predicted label index
+        # predictions : logit values for each label
+        prediction, predictions = model(**inputs)
+        prediction = prediction.cpu()
+            
+        metric.add_batch(
+            predictions=prediction,
+            references=label,
+        )
 
-            # for analysis : save predictions
-            prediction = prediction.item()
-            prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
+        # for analysis : save predictions
+        prediction = prediction.item()
+        prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
 
     eval_metric = metric.compute()
 

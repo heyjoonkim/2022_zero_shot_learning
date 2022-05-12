@@ -18,6 +18,7 @@ class GPT2Wrapper(torch.nn.Module):
         self.max_length = config.n_positions
 
         self._init_logger(args)
+        self.local_rank = args.local_rank
 
 
         # Main model for inference
@@ -29,15 +30,27 @@ class GPT2Wrapper(torch.nn.Module):
         # TODO : remove?
         # set optimizer
         # we need to define an optimizer to use deepspeed 
-        optimizer = AdamW(transformer.parameters())
+        # optimizer = AdamW(transformer.parameters())
         start_time = time.time()
         # initialize deepspeed
-        self.transformer, optimizer, _, _ = deepspeed.initialize(model=transformer, optimizer=optimizer, lr_scheduler=None, config_params=ds_config)
+        # self.transformer, optimizer, _, _ = deepspeed.initialize(model=transformer, optimizer=optimizer, lr_scheduler=None, config_params=ds_config)
+        # print('CUDA COUNT : ', torch.cuda.device_count())
+        
+        ds_engine = deepspeed.init_inference(
+            model=transformer, 
+            mp_size=torch.cuda.device_count(),
+            replace_method='auto',
+            replace_with_kernel_inject=True)
+            # dtype=torch.float16)
+
+        self.transformer = ds_engine.module
+
+        # print(type(self.transformer))
+        
         end_time = time.time()
         logger.info(f'Deepspeed initialization : {end_time - start_time} sec.')
 
         # del optimizer
-        del optimizer
         # for zero/few-shot inference. 
         # No gradient updates
         self.transformer.eval()
@@ -142,7 +155,7 @@ class GPT2Wrapper(torch.nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # print('=' * 50)
-        # print('input sentence :\n', input_sentence)
+        print('local_rank : ', self.local_rank, '\ninput sentence :\n', input_sentence)
 
         if self.multiple_token_flag:
             predictions = []
@@ -181,7 +194,8 @@ class GPT2Wrapper(torch.nn.Module):
                 logger.info(f'* Input longer than max length {self.max_length}')
                 logger.info(f'INPUT : {label_appended_input_sentence}')
 
-            outputs = self.transformer(**tokenized_inputs)
+            with torch.no_grad():
+                outputs = self.transformer(**tokenized_inputs)
 
             # shape : (1, length, vocab_size)
             logits = outputs.logits.cpu()
