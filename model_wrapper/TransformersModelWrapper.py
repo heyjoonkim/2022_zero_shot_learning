@@ -1,20 +1,24 @@
 
 from typing import Tuple
-import requests
 import time
+import logging
+import os
 
 import torch
-
 import deepspeed
-
 from transformers import AutoModelForCausalLM, AutoTokenizer, AdamW
 
+logger = logging.getLogger(__name__)
+
 class GPT2Wrapper(torch.nn.Module):
-    def __init__(self, config, model_name_or_path, verbalizer, ds_config):
+    def __init__(self, config, model_name_or_path, verbalizer, ds_config, args):
         super(GPT2Wrapper, self).__init__()
 
         self.config = config
         self.max_length = config.n_positions
+
+        self._init_logger(args)
+
 
         # Main model for inference
         transformer = AutoModelForCausalLM.from_pretrained(
@@ -22,14 +26,16 @@ class GPT2Wrapper(torch.nn.Module):
                                                             from_tf=bool(".ckpt" in model_name_or_path),
                                                             config=config)
 
-
         # TODO : remove?
         # set optimizer
         # we need to define an optimizer to use deepspeed 
         optimizer = AdamW(transformer.parameters())
+        start_time = time.time()
         # initialize deepspeed
         self.transformer, optimizer, _, _ = deepspeed.initialize(model=transformer, optimizer=optimizer, lr_scheduler=None, config_params=ds_config)
-        
+        end_time = time.time()
+        logger.info(f'Deepspeed initialization : {end_time - start_time} sec.')
+
         # del optimizer
         del optimizer
         # for zero/few-shot inference. 
@@ -48,6 +54,30 @@ class GPT2Wrapper(torch.nn.Module):
         assert self.num_labels == len(self.verbalizer.keys()), f'Number of labels({self.num_labels}) and verbalizer({self.verbalizer}) does not match'
 
         self.ids_list, self.multiple_token_flag = self._convert_verbalizer_to_ids(self.label2token, self.tokenizer)
+    
+    def _init_logger(self, args) -> None:
+        logging.basicConfig(
+            format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            datefmt="%m/%d/%Y %H:%M:%S",
+            level=logging.INFO
+        )
+
+        # Setup logging, we only want one process per machine to log things on the screen.
+        logger.setLevel(logging.INFO if args.local_rank == 0 else logging.ERROR)
+
+        if args.output_dir is not None:
+            if not os.path.isdir(args.output_dir):
+                os.makedirs(args.output_dir, exist_ok=True)
+            else:
+                if not args.overwrite_output_dir:
+                    logger.info(f'Output directory {args.output_dir} exits. Exit program. (overwrite_output_dir=False)')
+                    exit()
+                
+        logging_output_file = os.path.join(args.output_dir, "output.log")
+        file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s")
+        file_handler = logging.FileHandler(logging_output_file)
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
 
     # returns list of token ids of the verbalizer
     def _convert_verbalizer_to_ids(self, label2token, tokenizer):
@@ -58,13 +88,13 @@ class GPT2Wrapper(torch.nn.Module):
             token = label2token[label_index]
             # tokenize verbalizer
             ids = tokenizer(token)['input_ids']
-            print('> label_index', label_index, 'token', token, 'ids', ids)
+            logger.info(f'> label_index {label_index} token {token} ids {ids}')
             ids_list.append(ids)
             # ids_list.append(ids[0])
 
             if len(ids) > 1:
                 multiple_token_flag = True
-                print(f'Multiple token for verbalizer {token} -> {ids}')
+                logger.info(f'Multiple token for verbalizer {token} -> {ids}')
 
         if not multiple_token_flag:
             ids_list = [ids[0] for ids in ids_list]
@@ -111,8 +141,6 @@ class GPT2Wrapper(torch.nn.Module):
         **kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        start_time = time.time()
-
         # print('=' * 50)
         # print('input sentence :\n', input_sentence)
 
@@ -126,8 +154,8 @@ class GPT2Wrapper(torch.nn.Module):
                 tokenized_inputs = self.tokenizer(label_appended_input_sentence, return_tensors='pt').to(self.transformer.device)
 
                 if len(tokenized_inputs['input_ids']) > self.max_length:
-                    print(f'* Input longer than max length {self.max_length}')
-                    print(f'INPUT : {label_appended_input_sentence}')
+                    logger.info(f'* Input longer than max length {self.max_length}')
+                    logger.info(f'INPUT : {label_appended_input_sentence}')
 
                 outputs = self.transformer(**tokenized_inputs)
                 
@@ -150,8 +178,8 @@ class GPT2Wrapper(torch.nn.Module):
             # print('input ids', len(tokenized_inputs['input_ids']))
 
             if len(tokenized_inputs['input_ids']) > self.max_length:
-                print(f'* Input longer than max length {self.max_length}')
-                print(f'INPUT : {label_appended_input_sentence}')
+                logger.info(f'* Input longer than max length {self.max_length}')
+                logger.info(f'INPUT : {label_appended_input_sentence}')
 
             outputs = self.transformer(**tokenized_inputs)
 
@@ -170,9 +198,6 @@ class GPT2Wrapper(torch.nn.Module):
             predictions = self._verbalize(logprobs)
 
         prediction = torch.argmax(predictions, dim=-1)
-
-        end_time = time.time()
-        print(f'Inference time per sample : {end_time - start_time}')
 
         # shape : (1, )
         return prediction.unsqueeze(dim=0), predictions

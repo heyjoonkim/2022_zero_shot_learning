@@ -13,7 +13,6 @@ from tqdm.auto import tqdm
 import transformers
 from transformers.deepspeed import HfDeepSpeedConfig
 from transformers import (
-    AdamW,
     AutoConfig,
     AutoTokenizer,
     set_seed,
@@ -254,7 +253,7 @@ def main():
     )
 
     model_loading_start = time.time()
-    model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer, ds_config=args.ds_config)
+    model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer, ds_config=args.ds_config, args=args)
     model_loading_end = time.time()
     logger.info(f'Total time for loading model : {model_loading_end - model_loading_start} sec.')
 
@@ -331,7 +330,7 @@ def main():
     # model_engine.eval()
     
     # we don't need an optimizer for inference, so we remove it just in case :)
-    del optimizer
+    # del optimizer
 
     # Evaluate! 
     logger.info("***** Zero/Few-shot Evaluation *****")
@@ -386,28 +385,30 @@ def main():
 
     logger.info(f'=== in-context samples ===\n{incontext_samples}\n=====================')
         
-    for step, inputs in tqdm(enumerate(eval_dataset)):
-        # prepend in-context samples
-        if args.n_samples > 0:
-            inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
-            
-        label = torch.tensor(inputs['labels']).unsqueeze(dim=0)
+    if args.local_rank == 0:
+        for step, inputs in tqdm(enumerate(eval_dataset)):
+            print(f'step : {step}')
+            # prepend in-context samples
+            if args.n_samples > 0:
+                inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
+                
+            label = torch.tensor(inputs['labels']).unsqueeze(dim=0)
 
-        logger.info(f'INPUT SAMPLE INDEX : {step}\n{inputs["input_sentence"]}')
+            logger.info(f'INPUT SAMPLE INDEX : {step}\n{inputs["input_sentence"]}')
 
-        # prediction  : predicted label index
-        # predictions : logit values for each label
-        prediction, predictions = model(**inputs)
-        prediction = prediction.cpu()
-            
-        metric.add_batch(
-            predictions=prediction,
-            references=label,
-        )
+            # prediction  : predicted label index
+            # predictions : logit values for each label
+            prediction, predictions = model(**inputs)
+            prediction = prediction.cpu()
+                
+            metric.add_batch(
+                predictions=prediction,
+                references=label,
+            )
 
-        # for analysis : save predictions
-        prediction = prediction.item()
-        prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
+            # for analysis : save predictions
+            prediction = prediction.item()
+            prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
 
     eval_metric = metric.compute()
 
