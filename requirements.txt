@@ -7,3 +7,5 @@ scipy
 sklearn
 tensorboard
 sentence_transformers
+flask_cors
+flask

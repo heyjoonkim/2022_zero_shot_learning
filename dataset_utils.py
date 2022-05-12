@@ -454,7 +454,10 @@ task_to_keys = {
 task_to_verbalizer = {
     "cola": None,
     "mnli": None,
-    "mrpc": None,
+    "mrpc": {
+        " True" : 1,
+        " False" : 0,
+    },
     "qnli": None,
     "qqp": None,
     "rte": {

@@ -5,6 +5,7 @@ import random
 import json
 import time
 import pickle
+import requests
 
 import datasets
 from datasets import load_dataset, load_metric, DatasetDict, Dataset
@@ -142,9 +143,9 @@ def parse_args():
 
 def main():
     args = parse_args()
-    dschf = HfDeepSpeedConfig(args.ds_config)
-    deepspeed.init_distributed()
-    args.world_size = torch.distributed.get_world_size()
+    # dschf = HfDeepSpeedConfig(args.ds_config)
+    # deepspeed.init_distributed()
+    # args.world_size = torch.distributed.get_world_size()
 
     # Make one log on every process with the configuration for debugging.
     logging.basicConfig(
@@ -253,7 +254,7 @@ def main():
     )
 
     model_loading_start = time.time()
-    model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer, ds_config=args.ds_config)
+    model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer)
     model_loading_end = time.time()
     logger.info(f'Total time for loading model : {model_loading_end - model_loading_start}')
 
@@ -388,8 +389,16 @@ def main():
         logger.info(f'INPUT SAMPLE INDEX : {step}\n{inputs["input_sentence"]}')
 
         # prediction  : predicted label index
-        # predictions : logit values for each label
+        # # predictions : logit values for each label
         prediction, predictions = model(**inputs)
+        url = "http://127.0.0.1:5000/inference"
+        data = {'input_sentence' : inputs["input_sentence"]} 
+
+        outputs = requests.post(url, data=data)
+
+        print(outputs)
+        print(type(outputs))
+
         prediction = prediction.cpu()
             
         metric.add_batch(

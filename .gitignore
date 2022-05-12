@@ -5,6 +5,7 @@ retrieved_datasets/*
 tmp/*
 tmp*
 test_results/*
+few_shot/*
 *.txt
 
 # deepspeed configs

@@ -1,22 +1,44 @@
 
 from typing import Tuple
+import requests
+import time
 
 import torch
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
+import deepspeed
+
+from transformers import AutoModelForCausalLM, AutoTokenizer, AdamW
 
 class GPT2Wrapper(torch.nn.Module):
-    def __init__(self, config, model_name_or_path, verbalizer):
+    def __init__(self, config, model_name_or_path, verbalizer, ds_config):
         super(GPT2Wrapper, self).__init__()
 
+        device = torch.device("cuda")
+
         self.config = config
+        self.max_length = config.n_positions
+
+        # inference url
+        self.url = "http://127.0.0.1:5000/inference"
 
         # Main model
-        self.transformer = AutoModelForCausalLM.from_pretrained(
+        # load FP16
+        transformer = AutoModelForCausalLM.from_pretrained(
                                                             model_name_or_path,
                                                             from_tf=bool(".ckpt" in model_name_or_path),
                                                             config=config)
+
+        # set optimizer
+        # we need to define an optimizer to use deepspeed 
+        optimizer = AdamW(transformer.parameters())
+        # initialize deepspeed
+        self.transformer, optimizer, _, _ = deepspeed.initialize(model=transformer, optimizer=optimizer, lr_scheduler=None, config_params=ds_config)
+        print(type(optimizer))
+        del optimizer
+        # for zero/few-shot inference. 
+        # No gradient updates
+        self.transformer.eval()
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
@@ -91,6 +113,8 @@ class GPT2Wrapper(torch.nn.Module):
         **kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
+        start_time = time.time()
+
         # print('=' * 50)
         # print('input sentence :\n', input_sentence)
 
@@ -102,6 +126,10 @@ class GPT2Wrapper(torch.nn.Module):
                 label_appended_input_sentence = input_sentence + label_token
                 # tokenize label specific input sentence 
                 tokenized_inputs = self.tokenizer(label_appended_input_sentence, return_tensors='pt').to(self.transformer.device)
+
+                if len(tokenized_inputs['input_ids']) > self.max_length:
+                    print(f'* Input longer than max length {self.max_length}')
+                    print(f'INPUT : {label_appended_input_sentence}')
 
                 outputs = self.transformer(**tokenized_inputs)
                 
@@ -123,6 +151,10 @@ class GPT2Wrapper(torch.nn.Module):
             tokenized_inputs = self.tokenizer(input_sentence, return_tensors='pt').to(self.transformer.device)
             # print('input ids', len(tokenized_inputs['input_ids']))
 
+            if len(tokenized_inputs['input_ids']) > self.max_length:
+                print(f'* Input longer than max length {self.max_length}')
+                print(f'INPUT : {label_appended_input_sentence}')
+
             outputs = self.transformer(**tokenized_inputs)
 
             del tokenized_inputs
@@ -132,13 +164,16 @@ class GPT2Wrapper(torch.nn.Module):
             logits = outputs.logits.cpu()
             del outputs
 
-            probs = torch.softmax(logits, dim=2)
+            probs = torch.softmax(logits.float(), dim=2)
             # shape : (1, length, vocab_size)
             logprobs = torch.log(probs)
 
             predictions = self._verbalize(logprobs)
 
         prediction = torch.argmax(predictions, dim=-1)
+
+        end_time = time.time()
+        print(f'Inference time per sample : {end_time - start_time}')
 
         # shape : (1, )
         return prediction.unsqueeze(dim=0), predictions
