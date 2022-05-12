@@ -322,13 +322,13 @@ def main():
     # TODO : remove?
     # set optimizer
     # we need to define an optimizer to use deepspeed 
-    optimizer = AdamW(model.parameters())
-    start_time = time.time()
-    # initialize deepspeed
-    model_engine, optimizer, _, _ = deepspeed.initialize(model=model, optimizer=optimizer, lr_scheduler=None, config_params=args.ds_config)
-    end_time = time.time()
-    logger.info(f'Total time for Deepspeed initialization : {end_time - start_time}')
-    model_engine.eval()
+    # optimizer = AdamW(model.parameters())
+    # start_time = time.time()
+    # # initialize deepspeed
+    # model_engine, optimizer, _, _ = deepspeed.initialize(model=model, optimizer=optimizer, lr_scheduler=None, config_params=args.ds_config)
+    # end_time = time.time()
+    # logger.info(f'Total time for Deepspeed initialization : {end_time - start_time}')
+    # model_engine.eval()
     
     # we don't need an optimizer for inference, so we remove it just in case :)
     del optimizer
@@ -397,7 +397,7 @@ def main():
 
         # prediction  : predicted label index
         # predictions : logit values for each label
-        prediction, predictions = model_engine(**inputs)
+        prediction, predictions = model(**inputs)
         prediction = prediction.cpu()
             
         metric.add_batch(

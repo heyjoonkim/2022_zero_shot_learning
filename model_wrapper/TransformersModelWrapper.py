@@ -17,22 +17,24 @@ class GPT2Wrapper(torch.nn.Module):
         self.max_length = config.n_positions
 
         # Main model for inference
-        self.transformer = AutoModelForCausalLM.from_pretrained(
+        transformer = AutoModelForCausalLM.from_pretrained(
                                                             model_name_or_path,
                                                             from_tf=bool(".ckpt" in model_name_or_path),
                                                             config=config)
 
+
         # TODO : remove?
         # set optimizer
         # we need to define an optimizer to use deepspeed 
-        # optimizer = AdamW(transformer.parameters())
+        optimizer = AdamW(transformer.parameters())
         # initialize deepspeed
-        # self.transformer, optimizer, _, _ = deepspeed.initialize(model=transformer, optimizer=optimizer, lr_scheduler=None, config_params=ds_config)
+        self.transformer, optimizer, _, _ = deepspeed.initialize(model=transformer, optimizer=optimizer, lr_scheduler=None, config_params=ds_config)
         
         # del optimizer
+        del optimizer
         # for zero/few-shot inference. 
         # No gradient updates
-        # self.transformer.eval()
+        self.transformer.eval()
 
         # initialize tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
