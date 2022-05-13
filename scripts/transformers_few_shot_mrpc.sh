@@ -14,39 +14,39 @@ seeds="1" # 2 3 4 5"
 
 n_samples="16"
 
-for seed in $seeds; do
-# train mlm
-python generate_demonstrations.py \
-    --task_name $task \
-    --benchmark_name $benchmark \
-    --model_name_or_path $main_model \
-    --output_dir $main_path/$task/balanced/seed_$seed/k_$n_samples \
-    --seed $seed \
-    --balance_sample \
-    --overwrite_output_dir \
-    --n_samples $n_samples
-done   
+# select in-context samples from train set.
+# for seed in $seeds; do
+# python generate_demonstrations.py \
+#     --task_name $task \
+#     --benchmark_name $benchmark \
+#     --model_name_or_path $main_model \
+#     --output_dir $main_path/$task/balanced/seed_$seed/k_$n_samples \
+#     --seed $seed \
+#     --balance_sample \
+#     --overwrite_output_dir \
+#     --n_samples $n_samples
+# done   
 
    
 # # Minimal template #
-for seed in $seeds; do
-deepspeed transformers_main.py \
-    --task_name $task \
-    --benchmark_name $benchmark \
-    --model_name_or_path $main_model \
-    --demonstration_dir $main_path/$task/balanced/seed_$seed/k_$n_samples \
-    --output_dir $main_path/$task/balanced/seed_$seed/k_$n_samples/minimal \
-    --seed $seed \
-    --n_samples $n_samples \
-    --overwrite_output_dir \
-    --prefix '' \
-    --infix '
-' \
-    --postfix '
-'
+# for seed in $seeds; do
+# python transformers_main.py \
+#     --task_name $task \
+#     --benchmark_name $benchmark \
+#     --model_name_or_path $main_model \
+#     --demonstration_dir $main_path/$task/balanced/seed_$seed/k_$n_samples \
+#     --output_dir $main_path/$task/balanced/seed_$seed/k_$n_samples/minimal \
+#     --seed $seed \
+#     --n_samples $n_samples \
+#     --overwrite_output_dir \
+#     --prefix '' \
+#     --infix '
+# ' \
+#     --postfix '
+# '
 
-    # --ds_config ds_configs/zero3_config.json \
-done
+#     # --ds_config ds_configs/zero3_config.json \
+# done
 # # minimal template #
 
 # # Manual template #
@@ -105,24 +105,24 @@ done
 # The answer is:'
 # done
 
-# for seed in $seeds; do
-# deepspeed transformers_main.py \
-#     --task_name $task \
-#     --benchmark_name $benchmark \
-#     --model_name_or_path $main_model \
-#     --ds_config ds_configs/fp16.json \
-#     --demonstration_dir $main_path/$task/seed_$seed/k_$n_samples \
-#     --output_dir $main_path/$task/seed_$seed/k_$n_samples/template2 \
-#     --seed $seed \
-#     --n_samples $n_samples \
-#     --overwrite_output_dir \
-#     --prefix 'Premise : ' \
-#     --infix '
-# Hypothesis: ' \
-#     --postfix '
-# Does the premise entails the hypothesis? True or False?
-# The answer is:'
-# done
+for seed in $seeds; do
+deepspeed transformers_main.py \
+    --task_name $task \
+    --benchmark_name $benchmark \
+    --model_name_or_path $main_model \
+    --ds_config ds_configs/fp16.json \
+    --demonstration_dir $main_path/$task/balanced/seed_$seed/k_$n_samples \
+    --output_dir $main_path/$task/balanced/seed_$seed/k_$n_samples/template2 \
+    --seed $seed \
+    --n_samples $n_samples \
+    --overwrite_output_dir \
+    --prefix 'Premise : ' \
+    --infix '
+Hypothesis: ' \
+    --postfix '
+Does the premise entails the hypothesis? True or False?
+The answer is:'
+done
 
 # for seed in $seeds; do
 # deepspeed transformers_main.py \

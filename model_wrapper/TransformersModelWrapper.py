@@ -11,44 +11,52 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, AdamW
 logger = logging.getLogger(__name__)
 
 class GPT2Wrapper(torch.nn.Module):
-    def __init__(self, config, model_name_or_path, verbalizer, ds_config, args):
+    def __init__(self, config, model_name_or_path, verbalizer, args):
         super(GPT2Wrapper, self).__init__()
 
         self.config = config
         self.max_length = config.n_positions
+        self.device = torch.device("cuda")
 
         self._init_logger(args)
         self.local_rank = args.local_rank
 
 
         # Main model for inference
-        transformer = AutoModelForCausalLM.from_pretrained(
-                                                            model_name_or_path,
-                                                            from_tf=bool(".ckpt" in model_name_or_path),
-                                                            config=config)
+        # transformer = AutoModelForCausalLM.from_pretrained(
+        #                                                     model_name_or_path,
+        #                                                     from_tf=bool(".ckpt" in model_name_or_path),
+        #                                                     config=config)
+
+        self.transformer = AutoModelForCausalLM.from_pretrained(
+            model_name_or_path, 
+            revision="float16",             # specific model version to use. We use FP16 model
+            torch_dtype=torch.float16,  
+            low_cpu_mem_usage=True,         # keep RAM usage to 1x
+        ).to(self.device)
 
         # TODO : remove?
         # set optimizer
         # we need to define an optimizer to use deepspeed 
         # optimizer = AdamW(transformer.parameters())
-        start_time = time.time()
+        # start_time = time.time()
         # initialize deepspeed
         # self.transformer, optimizer, _, _ = deepspeed.initialize(model=transformer, optimizer=optimizer, lr_scheduler=None, config_params=ds_config)
         # print('CUDA COUNT : ', torch.cuda.device_count())
         
-        ds_engine = deepspeed.init_inference(
-            model=transformer, 
-            mp_size=torch.cuda.device_count(),
-            replace_method='auto',
-            replace_with_kernel_inject=True)
-            # dtype=torch.float16)
+        # ds_engine = deepspeed.init_inference(
+        #     model=transformer, 
+        #     mp_size=torch.cuda.device_count(),
+        #     replace_method='auto',
+        #     replace_with_kernel_inject=True)
+        #     # dtype=torch.float16)
 
-        self.transformer = ds_engine.module
+        # self.transformer = ds_engine.module
 
         # print(type(self.transformer))
         
-        end_time = time.time()
-        logger.info(f'Deepspeed initialization : {end_time - start_time} sec.')
+        # end_time = time.time()
+        # logger.info(f'Deepspeed initialization : {end_time - start_time} sec.')
 
         # del optimizer
         # for zero/few-shot inference. 
@@ -67,6 +75,13 @@ class GPT2Wrapper(torch.nn.Module):
         assert self.num_labels == len(self.verbalizer.keys()), f'Number of labels({self.num_labels}) and verbalizer({self.verbalizer}) does not match'
 
         self.ids_list, self.multiple_token_flag = self._convert_verbalizer_to_ids(self.label2token, self.tokenizer)
+
+
+        # for analysis
+        self.max_input_token = 0
+        self.max_input_index = -1
+        self.min_input_token = float('inf')
+        self.min_input_index = -1
     
     def _init_logger(self, args) -> None:
         logging.basicConfig(
@@ -154,9 +169,6 @@ class GPT2Wrapper(torch.nn.Module):
         **kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        # print('=' * 50)
-        print('local_rank : ', self.local_rank, '\ninput sentence :\n', input_sentence)
-
         if self.multiple_token_flag:
             predictions = []
 
@@ -164,11 +176,12 @@ class GPT2Wrapper(torch.nn.Module):
             for label_token, label_index in self.verbalizer.items():
                 label_appended_input_sentence = input_sentence + label_token
                 # tokenize label specific input sentence 
-                tokenized_inputs = self.tokenizer(label_appended_input_sentence, return_tensors='pt').to(self.transformer.device)
+                tokenized_inputs = self.tokenizer(label_appended_input_sentence, return_tensors='pt').to(self.device)
 
-                if len(tokenized_inputs['input_ids']) > self.max_length:
+                if input_ids_length > self.max_length:
                     logger.info(f'* Input longer than max length {self.max_length}')
                     logger.info(f'INPUT : {label_appended_input_sentence}')
+
 
                 outputs = self.transformer(**tokenized_inputs)
                 
@@ -187,12 +200,21 @@ class GPT2Wrapper(torch.nn.Module):
             predictions = torch.stack(predictions)
         else:
             # tokenize label specific input sentence 
-            tokenized_inputs = self.tokenizer(input_sentence, return_tensors='pt').to(self.transformer.device)
+            tokenized_inputs = self.tokenizer(input_sentence, return_tensors='pt').to(self.device)
             # print('input ids', len(tokenized_inputs['input_ids']))
+
+            input_ids_length = len(tokenized_inputs['input_ids'])
 
             if len(tokenized_inputs['input_ids']) > self.max_length:
                 logger.info(f'* Input longer than max length {self.max_length}')
                 logger.info(f'INPUT : {label_appended_input_sentence}')
+
+            # for analysis #
+            if input_ids_length > self.max_input_token:
+                self.max_input_token = input_ids_length
+            if input_ids_length < self.min_input_token:
+                self.min_input_token = input_ids_length
+            # for analysis #
 
             with torch.no_grad():
                 outputs = self.transformer(**tokenized_inputs)
@@ -215,3 +237,7 @@ class GPT2Wrapper(torch.nn.Module):
 
         # shape : (1, )
         return prediction.unsqueeze(dim=0), predictions
+
+    # for analysis
+    def get_token_length_analysis(self):
+        return self.max_input_token, self.min_input_token

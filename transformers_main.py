@@ -6,6 +6,8 @@ import json
 import time
 import pickle
 
+from click import progressbar
+
 import datasets
 from datasets import load_dataset, load_metric, DatasetDict, Dataset
 from tqdm.auto import tqdm
@@ -143,8 +145,8 @@ def parse_args():
 def main():
     args = parse_args()
     # dschf = HfDeepSpeedConfig(args.ds_config)
-    deepspeed.init_distributed()
-    args.world_size = torch.distributed.get_world_size()
+    # deepspeed.init_distributed()
+    # args.world_size = torch.distributed.get_world_size()
 
     # Make one log on every process with the configuration for debugging.
     logging.basicConfig(
@@ -253,7 +255,7 @@ def main():
     )
 
     model_loading_start = time.time()
-    model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer, ds_config=args.ds_config, args=args)
+    model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer, args=args)
     model_loading_end = time.time()
     logger.info(f'Total time for loading model : {model_loading_end - model_loading_start} sec.')
 
@@ -312,11 +314,14 @@ def main():
     # Get the metric function
     if args.task_name is not None and args.benchmark_name is not None:
         if args.benchmark_name == 'huggingface':
-            metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
+            # metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
+            metric = load_metric("accuracy")
         else:
-            metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
+            # metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
+            metric = load_metric(args.benchmark_name, args.task_name)
     elif args.task_name is not None:
-            metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
+            # metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
+            metric = load_metric("accuracy")
 
     # TODO : remove?
     # set optimizer
@@ -385,15 +390,15 @@ def main():
 
     logger.info(f'=== in-context samples ===\n{incontext_samples}\n=====================')
         
-    for step, inputs in tqdm(enumerate(eval_dataset)):
-        print(f'step : {step}')
+    progressbar = tqdm(range(len(eval_dataset)))
+    for step, inputs in enumerate(eval_dataset):
         # prepend in-context samples
         if args.n_samples > 0:
             inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
             
         label = torch.tensor(inputs['labels']).unsqueeze(dim=0)
 
-        logger.info(f'INPUT SAMPLE INDEX : {step}\n{inputs["input_sentence"]}')
+        # logger.info(f'INPUT SAMPLE INDEX : {step}\n{inputs["input_sentence"]}')
 
         # prediction  : predicted label index
         # predictions : logit values for each label
@@ -409,7 +414,14 @@ def main():
         prediction = prediction.item()
         prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
 
+        progressbar.update(1)
+
     eval_metric = metric.compute()
+
+    max_token_length, min_token_length = model.get_token_length_analysis()
+
+    logger.info(f'MAX TOKEN LENGTH : {max_token_length}')
+    logger.info(f'MIN TOKEN LENGTH : {min_token_length}')
 
     if args.n_samples == 0:
         logger.info(f"** Zero-shot evaluation result : {eval_metric}")
