@@ -455,8 +455,12 @@ task_to_verbalizer = {
     "cola": None,
     "mnli": None,
     "mrpc": {
-        " True" : 1,
-        " False" : 0,
+        # VERBALIZER 1
+        # " True" : 1,
+        # " False" : 0,
+        # VERBALIZER 2
+        "True" : 1,
+        "False" : 0,
     },
     "qnli": None,
     "qqp": None,

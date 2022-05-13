@@ -2,25 +2,20 @@ import argparse
 import logging
 import os
 import random
-import json
 import time
 import pickle
-
-from click import progressbar
 
 import datasets
 from datasets import load_dataset, load_metric, DatasetDict, Dataset
 from tqdm.auto import tqdm
 
 import transformers
-from transformers.deepspeed import HfDeepSpeedConfig
 from transformers import (
     AutoConfig,
     AutoTokenizer,
     set_seed,
 )
 import torch
-import deepspeed
 
 from model_wrapper.TransformersModelWrapper import GPT2Wrapper
 from utils import save_config
@@ -114,12 +109,21 @@ def parse_args():
         help="Postfix prompt.",
     )
     # until here #
+
+    # Other methods #
     parser.add_argument(
         '--explicit_label_space', 
         default=False, 
         action="store_true",
         help='Explicitly show label space.'
     )
+    parser.add_argument(
+        '--calibrate', 
+        default=False, 
+        action="store_true",
+        help='Calibrate before use.'
+    )
+    # until here #
 
     args = parser.parse_args()
     
@@ -129,24 +133,11 @@ def parse_args():
     elif args.task_name is None:
         raise NotImplementedError('Tasks for GLUE benchmarks are implemented yet.')
 
-    # post init get batch and zero option from ds config
-    # with open(args.ds_config, "r", encoding="utf-8") as ds_f:
-    #     ds_config = json.load(ds_f)
-    # args.per_device_batch_size = ds_config['train_micro_batch_size_per_gpu']
-    # args.gradient_accumulation_steps = ds_config['gradient_accumulation_steps']
-    # if ds_config.get("zero_optimization"):
-    #     args.is_zero3 = ds_config["zero_optimization"]["stage"] == 3
-    # else:
-    #     args.is_zero3 = False
-
     return args
 
 
 def main():
     args = parse_args()
-    # dschf = HfDeepSpeedConfig(args.ds_config)
-    # deepspeed.init_distributed()
-    # args.world_size = torch.distributed.get_world_size()
 
     # Make one log on every process with the configuration for debugging.
     logging.basicConfig(
@@ -156,7 +147,7 @@ def main():
     )
 
     # Setup logging, we only want one process per machine to log things on the screen.
-    logger.setLevel(logging.INFO if args.local_rank == 0 else logging.ERROR)
+    logger.setLevel(logging.INFO)
 
     if args.output_dir is not None:
         if not os.path.isdir(args.output_dir):
@@ -175,20 +166,12 @@ def main():
     args.verbalizer = task_to_verbalizer.get(args.task_name)
     args.label2token = {v:k for k,v in args.verbalizer.items()}
 
-    if args.local_rank == 0:
-        datasets.utils.logging.set_verbosity_warning()
-        transformers.utils.logging.set_verbosity_info()
-    else:
-        datasets.utils.logging.set_verbosity_error()
-        transformers.utils.logging.set_verbosity_error()
-
     # If passed along, set the training seed now.
     if args.seed is not None:
         set_seed(args.seed)
         random.seed(args.seed)
 
     # Handle the repository creation & SummaryWriter
-    # if args.local_rank == 0:
     save_config(args)
 
     # In distributed training, the load_dataset function guarantee that only one local process can concurrently
@@ -323,27 +306,11 @@ def main():
             # metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
             metric = load_metric("accuracy")
 
-    # TODO : remove?
-    # set optimizer
-    # we need to define an optimizer to use deepspeed 
-    # optimizer = AdamW(model.parameters())
-    # start_time = time.time()
-    # # initialize deepspeed
-    # model_engine, optimizer, _, _ = deepspeed.initialize(model=model, optimizer=optimizer, lr_scheduler=None, config_params=args.ds_config)
-    # end_time = time.time()
-    # logger.info(f'Total time for Deepspeed initialization : {end_time - start_time}')
-    # model_engine.eval()
-    
-    # we don't need an optimizer for inference, so we remove it just in case :)
-    # del optimizer
-
     # Evaluate! 
     logger.info("***** Zero/Few-shot Evaluation *****")
     logger.info(f"  TASK                                = {args.task_name}")
     logger.info(f"  Num TRAIN examples                  = {len(train_dataset)}")
     logger.info(f"  Num EVAL  examples                  = {len(eval_dataset)}")
-    # logger.info(f"  Instantaneous batch size per device = {args.per_device_batch_size}")
-    # logger.info(f"  World Size                          = {args.world_size}")
     logger.info(f"  Random Seed                         = {args.seed}")
     logger.info(f"  K                                   = {args.n_samples}")
     logger.info(f"  Inference Model                     = {args.model_name_or_path}")

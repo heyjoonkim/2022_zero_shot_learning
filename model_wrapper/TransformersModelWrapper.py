@@ -1,12 +1,10 @@
 
 from typing import Tuple
-import time
 import logging
 import os
 
 import torch
-import deepspeed
-from transformers import AutoModelForCausalLM, AutoTokenizer, AdamW
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +19,6 @@ class GPT2Wrapper(torch.nn.Module):
         self._init_logger(args)
         self.local_rank = args.local_rank
 
-
-        # Main model for inference
-        # transformer = AutoModelForCausalLM.from_pretrained(
-        #                                                     model_name_or_path,
-        #                                                     from_tf=bool(".ckpt" in model_name_or_path),
-        #                                                     config=config)
-
         self.transformer = AutoModelForCausalLM.from_pretrained(
             model_name_or_path, 
             revision="float16",             # specific model version to use. We use FP16 model
@@ -35,30 +26,6 @@ class GPT2Wrapper(torch.nn.Module):
             low_cpu_mem_usage=True,         # keep RAM usage to 1x
         ).to(self.device)
 
-        # TODO : remove?
-        # set optimizer
-        # we need to define an optimizer to use deepspeed 
-        # optimizer = AdamW(transformer.parameters())
-        # start_time = time.time()
-        # initialize deepspeed
-        # self.transformer, optimizer, _, _ = deepspeed.initialize(model=transformer, optimizer=optimizer, lr_scheduler=None, config_params=ds_config)
-        # print('CUDA COUNT : ', torch.cuda.device_count())
-        
-        # ds_engine = deepspeed.init_inference(
-        #     model=transformer, 
-        #     mp_size=torch.cuda.device_count(),
-        #     replace_method='auto',
-        #     replace_with_kernel_inject=True)
-        #     # dtype=torch.float16)
-
-        # self.transformer = ds_engine.module
-
-        # print(type(self.transformer))
-        
-        # end_time = time.time()
-        # logger.info(f'Deepspeed initialization : {end_time - start_time} sec.')
-
-        # del optimizer
         # for zero/few-shot inference. 
         # No gradient updates
         self.transformer.eval()
@@ -76,12 +43,9 @@ class GPT2Wrapper(torch.nn.Module):
 
         self.ids_list, self.multiple_token_flag = self._convert_verbalizer_to_ids(self.label2token, self.tokenizer)
 
-
         # for analysis
         self.max_input_token = 0
-        self.max_input_index = -1
         self.min_input_token = float('inf')
-        self.min_input_index = -1
     
     def _init_logger(self, args) -> None:
         logging.basicConfig(
@@ -182,7 +146,6 @@ class GPT2Wrapper(torch.nn.Module):
                     logger.info(f'* Input longer than max length {self.max_length}')
                     logger.info(f'INPUT : {label_appended_input_sentence}')
 
-
                 outputs = self.transformer(**tokenized_inputs)
                 
                 # shape : (1, length, vocab_size)
@@ -203,9 +166,9 @@ class GPT2Wrapper(torch.nn.Module):
             tokenized_inputs = self.tokenizer(input_sentence, return_tensors='pt').to(self.device)
             # print('input ids', len(tokenized_inputs['input_ids']))
 
-            input_ids_length = len(tokenized_inputs['input_ids'])
+            input_ids_length = len(tokenized_inputs['input_ids'][0])
 
-            if len(tokenized_inputs['input_ids']) > self.max_length:
+            if input_ids_length > self.max_length:
                 logger.info(f'* Input longer than max length {self.max_length}')
                 logger.info(f'INPUT : {label_appended_input_sentence}')
 
