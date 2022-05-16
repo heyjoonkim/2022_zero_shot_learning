@@ -459,8 +459,17 @@ task_to_verbalizer = {
         # " True" : 1,
         # " False" : 0,
         # VERBALIZER 2
-        "True" : 1,
-        "False" : 0,
+        # "True" : 1,
+        # "False" : 0,
+        # VERBALIZER 3
+        # "Yes" : 1,
+        # "No" : 0,
+        # VERBALIZER 4
+        # " Yes" : 1,
+        # " No" : 0,
+        # VERBALIZER 6
+        "car" : 1,
+        "bus" : 0,
     },
     "qnli": None,
     "qqp": None,

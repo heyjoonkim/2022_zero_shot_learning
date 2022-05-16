@@ -46,6 +46,10 @@ class GPT2Wrapper(torch.nn.Module):
         # for analysis
         self.max_input_token = 0
         self.min_input_token = float('inf')
+
+        self.calibrate = args.calibrate
+        if self.calibrate:
+            self.zero_prompt_distribution = self._get_zero_prompt_distribution(args)
     
     def _init_logger(self, args) -> None:
         logging.basicConfig(
@@ -196,6 +200,10 @@ class GPT2Wrapper(torch.nn.Module):
 
             predictions = self._verbalize(logprobs)
 
+            
+            if self.calibrate:
+                predictions = predictions - self.zero_prompt_distribution
+
         prediction = torch.argmax(predictions, dim=-1)
 
         # shape : (1, )
@@ -204,3 +212,29 @@ class GPT2Wrapper(torch.nn.Module):
     # for analysis
     def get_token_length_analysis(self):
         return self.max_input_token, self.min_input_token
+
+    # get zero-prompt distribution for calibration
+    def _get_zero_prompt_distribution(self, args):
+        zero_prompt = args.prefix + args.infix + args.postfix
+        print('zero_prompt', zero_prompt)
+        tokenized_inputs = self.tokenizer(zero_prompt, return_tensors='pt').to(self.device)
+        with torch.no_grad():
+            outputs = self.transformer(**tokenized_inputs)
+        
+        # shape : (1, length, vocab_size)
+        logits = outputs.logits.cpu()
+        print('logits', logits.shape)
+
+        # empty cache
+        del outputs
+        del tokenized_inputs
+        torch.cuda.empty_cache()
+
+        probs = torch.softmax(logits.float(), dim=2)
+        # shape : (1, length, vocab_size)
+        logprobs = torch.log(probs)
+
+        predictions = self._verbalize(logprobs)
+        print('predictions', predictions.shape)
+          
+        return predictions
