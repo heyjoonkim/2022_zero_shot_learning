@@ -27,17 +27,17 @@ n_samples="16"
 #     --n_samples $n_samples
 # done   
 
-# # select in-context samples from train set. (RANDOM)
-# for seed in $seeds; do
-# python generate_demonstrations.py \
-#     --task_name $task \
-#     --benchmark_name $benchmark \
-#     --model_name_or_path $main_model \
-#     --output_dir $main_path/$task/seed_$seed/k_$n_samples \
-#     --seed $seed \
-#     --overwrite_output_dir \
-#     --n_samples $n_samples
-# done   
+# select in-context samples from train set. (RANDOM)
+for seed in $seeds; do
+python generate_demonstrations.py \
+    --task_name $task \
+    --benchmark_name $benchmark \
+    --model_name_or_path $main_model \
+    --output_dir $main_path/$task-seed_$seed-k_$n_samples \
+    --seed $seed \
+    --overwrite_output_dir \
+    --n_samples $n_samples
+done   
 
    
 # ## Minimal template ##

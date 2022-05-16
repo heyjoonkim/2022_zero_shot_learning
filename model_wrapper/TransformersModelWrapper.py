@@ -17,13 +17,16 @@ class GPT2Wrapper(torch.nn.Module):
         self.device = torch.device("cuda")
 
         self._init_logger(args)
-        self.local_rank = args.local_rank
+
+        # self.transformer = AutoModelForCausalLM.from_pretrained(
+        #     model_name_or_path, 
+        #     revision="float16",             # specific model version to use. We use FP16 model
+        #     torch_dtype=torch.float16,  
+        #     low_cpu_mem_usage=True,         # keep RAM usage to 1x
+        # ).to(self.device)
 
         self.transformer = AutoModelForCausalLM.from_pretrained(
             model_name_or_path, 
-            revision="float16",             # specific model version to use. We use FP16 model
-            torch_dtype=torch.float16,  
-            low_cpu_mem_usage=True,         # keep RAM usage to 1x
         ).to(self.device)
 
         # for zero/few-shot inference. 
@@ -47,9 +50,10 @@ class GPT2Wrapper(torch.nn.Module):
         self.max_input_token = 0
         self.min_input_token = float('inf')
 
-        self.calibrate = args.calibrate
-        if self.calibrate:
-            self.zero_prompt_distribution = self._get_zero_prompt_distribution(args)
+        if "calibrate" in args:
+            self.calibrate = args.calibrate
+            if self.calibrate:
+                self.zero_prompt_distribution = self._get_zero_prompt_distribution(args)
     
     def _init_logger(self, args) -> None:
         logging.basicConfig(
@@ -59,7 +63,7 @@ class GPT2Wrapper(torch.nn.Module):
         )
 
         # Setup logging, we only want one process per machine to log things on the screen.
-        logger.setLevel(logging.INFO if args.local_rank == 0 else logging.ERROR)
+        logger.setLevel(logging.INFO)
 
         if args.output_dir is not None:
             if not os.path.isdir(args.output_dir):
@@ -128,6 +132,94 @@ class GPT2Wrapper(torch.nn.Module):
             total_probs = logprobs[0, -1,  self.ids_list]
         return total_probs
 
+    # get log-probability of the token of the label
+    # for multiple-tokens we normalize by length (for now)
+    def _verbalize_channel(
+        self,
+        logprobs,   # shape : (1, length, vocab_size)
+        input_sentence_tokens,
+    ):
+        input_sentence_token_length = len(input_sentence_tokens)
+        # shift log-probabilities
+        logprobs = logprobs[:, :-1, :]
+
+        # shape : (1, input_sentence_token_length, vocab_size)
+        label_logprobs = logprobs[:, -input_sentence_token_length:, :]
+
+        total_probs=0
+        for input_index, token_index in enumerate(input_sentence_tokens):
+            token_logprob = label_logprobs[0, input_index, token_index]
+            total_probs += token_logprob
+            
+        return total_probs
+
+    def channel_forward(
+        self,
+        input_sentence,
+        demonstrations,
+        sep, 
+        prefix,
+        postfix,
+        labels=None,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+
+        predictions = []
+
+        input_sentence_tokens = self.tokenizer(input_sentence, return_tensors='pt')['input_ids'][0]
+
+        # print(f'demonstration >\n{demonstrations}')
+        # print(f'input_sentence >\n{input_sentence}')
+        # print('input_sentence_token_length', len(input_sentence_tokens))
+        # print('=' * 50)
+
+        label_list = list(self.label2token.keys())
+        label_list.sort()
+
+        # same as noisy channel inference
+        for prediction_count, label_index in enumerate(label_list):
+            label_token = self.label2token.get(label_index)
+            
+            label_sentence = prefix + label_token + postfix
+            label_prepended_input_sentence = demonstrations + sep + label_sentence + '\n' + input_sentence
+
+            # print(label_prepended_input_sentence)
+            # print('-' * 50)
+
+            # tokenize label specific input sentence 
+            tokenized_inputs = self.tokenizer(label_prepended_input_sentence, return_tensors='pt').to(self.device)
+
+            input_ids_length = len(tokenized_inputs['input_ids'][0])
+
+            outputs = self.transformer(**tokenized_inputs)
+            
+            # shape : (1, length, vocab_size)
+            logits = outputs.logits
+
+            probs = torch.softmax(logits, dim=2)
+            # shape : (1, length, vocab_size)
+            logprobs = torch.log(probs)
+
+            verbalizer_logprob = self._verbalize_channel(logprobs, input_sentence_tokens)
+
+            assert prediction_count == len(predictions), f'Prediction index : {prediction_count} <-> prediction count : {len(predictions)}'
+            predictions.append(verbalizer_logprob)
+
+            # for analysis #
+            if input_ids_length > self.max_input_token:
+                self.max_input_token = input_ids_length
+            if input_ids_length < self.min_input_token:
+                self.min_input_token = input_ids_length
+            # for analysis #
+        # print('*' * 200)
+        predictions = torch.stack(predictions)
+        
+
+        prediction = torch.argmax(predictions, dim=-1)
+
+        # shape : (1, )
+        return prediction.unsqueeze(dim=0), predictions
+
     def forward(
         self,
         input_sentence,
@@ -145,6 +237,8 @@ class GPT2Wrapper(torch.nn.Module):
                 label_appended_input_sentence = input_sentence + label_token
                 # tokenize label specific input sentence 
                 tokenized_inputs = self.tokenizer(label_appended_input_sentence, return_tensors='pt').to(self.device)
+
+                input_ids_length = len(tokenized_inputs['input_ids'][0])
 
                 if input_ids_length > self.max_length:
                     logger.info(f'* Input longer than max length {self.max_length}')
