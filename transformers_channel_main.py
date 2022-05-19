@@ -6,8 +6,10 @@ import time
 import pickle
 
 import datasets
+from collections import defaultdict
 from datasets import load_dataset, load_metric, DatasetDict
 from tqdm.auto import tqdm
+import numpy as np
 
 import transformers
 from transformers import (
@@ -19,7 +21,7 @@ import torch
 
 from model_wrapper.TransformersModelWrapper import GPT2Wrapper
 from utils import save_config
-from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer
+from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer, no_validation_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +39,7 @@ def parse_args():
         type=str,
         default=None,
         help="The name of the benchmark to train on.",
-        choices=['glue', 'super_glue', 'huggingface'],
+        choices=['glue', 'super_glue', 'huggingface', 'tweet_eval', 'financial_phrasebank', 'ethos'],
     )
     parser.add_argument(
         "--model_name_or_path",
@@ -154,9 +156,25 @@ def main():
     # download the dataset.
     raw_datasets = DatasetDict()
     if args.task_name is not None and args.benchmark_name is not None:
-        if args.benchmark_name == 'huggingface':
+        if args.task_name in no_validation_tasks:
+            split = 'test' if args.task_name == 'climate_fever' else 'train'
+            # financial phrasebank
+            if args.task_name == 'sentences_allagree':
+                raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=split)
+            # ethos
+            elif args.benchmark_name == 'ethos':
+                raw_train_dataset = load_dataset(args.benchmark_name, 'multilabel', split=split)
+            # others
+            else:
+                raw_train_dataset = load_dataset(args.task_name, split=split)
+        # tasks from huggingface datasets with validation sets
+        elif args.benchmark_name == 'huggingface':
             raw_train_dataset = load_dataset(args.task_name, split='train')
-            raw_eval_dataset = load_dataset(args.task_name, split='test')
+            # raw_eval_dataset = load_dataset(args.task_name, split='test')
+            raw_eval_dataset = load_dataset(args.task_name, split='validation')
+        elif args.benchmark_name == 'tweet_eval':
+            raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split='train')
+            raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation')
         else:
             # Downloading and loading a dataset from the hub.
             raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
@@ -164,47 +182,33 @@ def main():
     else:
         raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
 
+    # we have to split the data into train/validation set 
+    if args.task_name in no_validation_tasks:
+        with open('validation_indices.pkl', 'rb') as fp:
+            validation_indices = pickle.load(fp)
+            task_key = args.task_name
+            if task_key == 'sentences_allagree':
+                task_key = 'financial_phrasebank'
+            elif args.benchmark_name == 'ethos':
+                task_key = args.benchmark_name
+            selected_validation_indices = validation_indices[task_key]
+            # print(selected_validation_indices)
+            # print(len(selected_validation_indices))
+            full_indices = list(range(len(raw_train_dataset)))
+            # print(len(full_indices))
+            train_indices = list(set(full_indices) - set(selected_validation_indices))
+            # print(len(train_indices))
+            filtered_raw_train_dataset = raw_train_dataset.select(train_indices)
+            raw_eval_dataset = raw_train_dataset.select(selected_validation_indices)
+            raw_train_dataset = filtered_raw_train_dataset
+
+
     raw_datasets['train'] = raw_train_dataset
     raw_datasets['validation'] = raw_eval_dataset
 
-    # log dataset details
-    logger.info('TRAIN / VALIDATION split.')
-    for split, dataset in raw_datasets.items():
-        logger.info(f'{split} > {len(dataset)}')
-        
-    # Labels
-    if args.task_name is not None and args.benchmark_name is not None:
-        if args.benchmark_name == 'huggingface':
-            if "label-coarse" in raw_datasets['train'].features:
-            # TODO : fix? only for TREC dataset
-                label_list = raw_datasets["train"].features["label-coarse"].names
-            else:
-                label_list = raw_datasets["train"].features["label"].names
-        else:
-            # label_list : ['entailment', 'not_entailment']
-            label_list = raw_datasets["train"].features["label"].names
-        num_labels = len(label_list)
-    else:
-        raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
 
-    # Load pretrained model and tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
-    # For gpt-2
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.unk_token
 
-    # TODO: only inject pad_token_id in case of GPT
-    config = AutoConfig.from_pretrained(
-        args.model_name_or_path, 
-        num_labels=num_labels, 
-        finetuning_task=args.task_name, 
-        pad_token_id=tokenizer.unk_token_id
-    )
-
-    model_loading_start = time.time()
-    model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer, args=args)
-    model_loading_end = time.time()
-    logger.info(f'Total time for loading model : {model_loading_end - model_loading_start} sec.')
+    
 
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
@@ -240,10 +244,14 @@ def main():
             result['input_sentence'] = input_sentences
             
             # Map labels to IDs (not necessary for GLUE tasks)
-            if "label" in examples:
-                result["labels"] = examples["label"]
+            if 'claim_label' in examples:
+                result["labels"] = examples["claim_label"]
+            elif args.benchmark_name == 'ethos':
+                result["labels"] = examples[args.task_name]
             elif 'label-coarse' in examples:
                 result["labels"] = examples['label-coarse']
+            elif "label" in examples:
+                result["labels"] = examples["label"]
             else:
                 raise NotImplementedError
             return result
@@ -255,17 +263,66 @@ def main():
         desc="Preprocessing datasets...",
     )
 
+
     train_dataset = processed_datasets["train"]
     eval_dataset = processed_datasets["validation"]
+
+    # train_dataset = train_dataset.filter(lambda example: example['labels'] in args.verbalizer.values())
+    # eval_dataset = eval_dataset.filter(lambda example: example['labels'] in args.verbalizer.values())
+
+    # log dataset details
+    logger.info('TRAIN / VALIDATION split.')
+    logger.info(f'TRAIN > {len(train_dataset)}')
+    logger.info(f'EVAL  > {len(eval_dataset)}')
+
+        
+    num_labels = len(args.verbalizer)
+    # # Labels
+    # if args.task_name is not None and args.benchmark_name is not None:
+    #     if args.benchmark_name == 'huggingface':
+    #         if "label-coarse" in raw_datasets['train'].features:
+    #         # TODO : fix? only for TREC dataset
+    #             label_list = raw_datasets["train"].features["label-coarse"].names
+    #         else:
+    #             label_list = raw_datasets["train"].features["label"].names
+    #     else:
+    #         # label_list : ['entailment', 'not_entailment']
+    #         label_list = raw_datasets["train"].features["label"].names
+    #     num_labels = len(label_list)
+    # else:
+    #     raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
+
+    # Load pretrained model and tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
+    # For gpt-2
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.unk_token
+
+    # TODO: only inject pad_token_id in case of GPT
+    config = AutoConfig.from_pretrained(
+        args.model_name_or_path, 
+        num_labels=num_labels, 
+        finetuning_task=args.task_name, 
+        pad_token_id=tokenizer.unk_token_id
+    )
+
+    logger.info(f'Start loading model {args.model_name_or_path}')
+    model_loading_start = time.time()
+    model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer, args=args)
+    model_loading_end = time.time()
+    logger.info(f'Total time for loading model : {model_loading_end - model_loading_start} sec.')
       
     # Get the metric function
-    if args.task_name is not None and args.benchmark_name is not None:
-        if args.benchmark_name == 'huggingface':
-            metric = load_metric("accuracy")
-        else:
-            metric = load_metric(args.benchmark_name, args.task_name)
-    elif args.task_name is not None:
-            metric = load_metric("accuracy")
+    # if args.task_name is not None and args.benchmark_name is not None:
+    #     if args.benchmark_name == 'huggingface' or args.benchmark_name == 'tweet_eval':
+    #         metric = load_metric("accuracy")
+    #     else:
+    #         metric = load_metric(args.benchmark_name, args.task_name)
+    # elif args.task_name is not None:
+    #         metric = load_metric("accuracy")
+    
+    accuracy = load_metric('accuracy')
+    f1 = load_metric('f1')
 
     # Evaluate! 
     logger.info("***** Zero/Few-shot Evaluation *****")
@@ -319,6 +376,10 @@ def main():
 
     logger.info(f'=== in-context samples ===\n{demonstrations}\n=====================')
         
+    
+    accs = []
+    precisions = defaultdict(list)
+    recalls = defaultdict(list)
     progressbar = tqdm(range(len(eval_dataset)))
     for step, inputs in enumerate(eval_dataset):
         inputs['demonstrations'] = demonstrations
@@ -327,17 +388,26 @@ def main():
         inputs['prefix'] = args.prefix
         inputs['postfix'] = args.postfix
             
-        label = torch.tensor(inputs['labels']).unsqueeze(dim=0)
+        # label = torch.tensor(inputs['labels']).unsqueeze(dim=0)
+        label = inputs['labels']
 
         # prediction  : predicted label index
         # predictions : logit values for each label
         prediction, predictions = model.channel_forward(**inputs)
         prediction = prediction.cpu()
             
-        metric.add_batch(
-            predictions=prediction,
-            references=label,
-        )
+        # metric.add_batch(
+        #     predictions=prediction,
+        #     references=label,
+        # )
+        # accuracy.add_batch(
+        #     predictions=prediction,
+        #     references=label,
+        # )
+        # f1.add_batch(
+        #     predictions=prediction,
+        #     references=label,
+        # )
 
         # for analysis : save predictions
         prediction = prediction.item()
@@ -345,7 +415,27 @@ def main():
 
         progressbar.update(1)
 
-    eval_metric = metric.compute()
+        if prediction == label:
+            is_correct = 1
+        else:
+            is_correct = 0
+        accs.append(is_correct)
+        recalls[label].append(is_correct)
+        precisions[prediction].append(is_correct)
+
+    acc = np.mean(accs)
+    f1s = []
+    for key in recalls:
+        precision = np.mean(precisions[key]) if key in precisions else 1.0
+        recall = np.mean(recalls[key])
+        if precision+recall==0:
+            f1s.append(0)
+        else:
+            f1s.append(2*precision*recall / (precision+recall))
+    f1 = np.mean(f1s)
+
+    # accuracy_metric = accuracy.compute()
+    # f1_metric = f1.compute()
 
     max_token_length, min_token_length = model.get_token_length_analysis()
 
@@ -353,9 +443,12 @@ def main():
     logger.info(f'MIN TOKEN LENGTH : {min_token_length}')
 
     if args.n_samples == 0:
-        logger.info(f"** Zero-shot evaluation result : {eval_metric}")
+        logger.info("** Zero-shot evaluation result >")
     else:
-        logger.info(f"** {args.n_samples}-shot evaluation result : {eval_metric}")
+        logger.info(f"** {args.n_samples}-shot evaluation result >")
+
+    logger.info(f'> ACCURACY : {acc}')
+    logger.info(f'> F1       : {f1}')
 
     logger.info(f'** Predictions distribution : {prediction_dict}')
     logger.info("Done.")

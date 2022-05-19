@@ -5,14 +5,14 @@ import random
 import pickle
 import time
 
-from datasets import load_dataset, DatasetDict, Dataset
+from datasets import load_dataset, DatasetDict
 
 from transformers import (
     AutoTokenizer,
     set_seed,
 )
 from utils import save_config
-from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer
+from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer, no_validation_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def parse_args():
         type=str,
         default=None,
         help="The name of the benchmark to train on.",
-        choices=['glue', 'super_glue', 'huggingface'],
+        choices=['glue', 'super_glue', 'huggingface', 'tweet_eval', 'financial_phrasebank', 'ethos'],
     )
     parser.add_argument(
         "--model_name_or_path",
@@ -102,6 +102,7 @@ def main():
     logger.addHandler(file_handler)
 
     args.verbalizer = task_to_verbalizer.get(args.task_name)
+    args.label2token = {v:k for k,v in args.verbalizer.items()}
 
     # If passed along, set the training seed now.
     if args.seed is not None:
@@ -115,39 +116,40 @@ def main():
     # download the dataset.
     raw_datasets = DatasetDict()
     if args.task_name is not None and args.benchmark_name is not None:
+        split = 'test' if args.task_name == 'climate_fever' else 'train'
         if args.benchmark_name == 'huggingface':
-            raw_train_dataset = load_dataset(args.task_name, split='train')
+            raw_train_dataset = load_dataset(args.task_name, split=split)
+        # elif args.benchmark_name == 'tweet_eval':
+        #     raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split='train')
+        elif args.benchmark_name == 'ethos':
+            raw_train_dataset = load_dataset(args.benchmark_name, 'multilabel', split=split)
         else:
             # Downloading and loading a dataset from the hub.
-            raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
-
-    # Load test dataset
-    elif args.task_name in task_to_path:
-        dataset_processor = task_to_path[args.task_name]["dataset_processor"]
-        train_file_path = task_to_path[args.task_name]["train"]
-
-        # train set
-        train_dict = dataset_processor(train_file_path)
-        raw_train_dataset = Dataset.from_dict(train_dict)
+            raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=split)
     else:
         raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
+
+
+    # we have to split the data into train/validation set 
+    if args.task_name in no_validation_tasks:
+        with open('validation_indices.pkl', 'rb') as fp:
+            validation_indices = pickle.load(fp)
+            task_key = args.task_name
+            if task_key == 'sentences_allagree':
+                task_key = 'financial_phrasebank'
+            elif args.benchmark_name == 'ethos':
+                task_key = args.benchmark_name
+            selected_validation_indices = validation_indices[task_key]
+            print('validation', len(selected_validation_indices))
+            full_indices = list(range(len(raw_train_dataset)))
+            print('full', len(full_indices))
+            train_indices = list(set(full_indices) - set(selected_validation_indices))
+            print('train', len(train_indices))
+            raw_train_dataset = raw_train_dataset.select(train_indices)
 
     raw_datasets['train'] = raw_train_dataset
     
-    # Labels
-    if args.task_name is not None and args.benchmark_name is not None:
-        if args.benchmark_name == 'huggingface':
-            # TODO : fix? only for TREC dataset
-            label_list = raw_datasets["train"].features["label-coarse"].names
-        else:
-            # label_list : ['entailment', 'not_entailment']
-            label_list = raw_datasets["train"].features["label"].names
-        num_labels = len(label_list)
-    elif args.task_name in task_to_path:
-        label_list = set(raw_datasets["train"]['label'])
-        num_labels = len(label_list)
-    else:
-        raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
+    num_labels = len(args.verbalizer)
 
     # Load pretrained model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
@@ -157,8 +159,12 @@ def main():
 
     train_dataset = raw_datasets["train"]
 
+    # train_dataset = train_dataset.filter(lambda example: example['labels'] in args.verbalizer.values())
+
     # Evaluate! 
-    logger.info("***** Zero/Few-shot Evaluation *****")
+    logger.info("***** Generate few-shot *****")
+    logger.info(f"  BENCHMARK              = {args.benchmark_name}")
+    logger.info(f"  TASK                   = {args.task_name}")
     logger.info(f"  Num TRAIN examples     = {len(train_dataset)}")
     logger.info(f"  Random Seed            = {args.seed}")
     logger.info(f"  K                      = {args.n_samples}")
@@ -196,11 +202,11 @@ def main():
                     # print(class_dataset[random_index])
 
                     dataset_index, sample = class_dataset[random_index]
-                    if dataset_index not in selected_index:
+                    selected_label = sample['label']
+                    if dataset_index not in selected_index and selected_label in list(args.verbalizer.values()):
                         selected_index.append(dataset_index)
                         selected_count += 1
 
-                        selected_label = sample['label']
                         sample_balance[selected_label] = sample_balance.get(selected_label, 0) + 1
                         break
 
@@ -215,11 +221,20 @@ def main():
         while True:
             random_index = random.randint(0, data_count-1)
 
-            if random_index not in selected_index:
+
+            if 'label-coarse' in train_dataset[random_index]:
+                selected_label = train_dataset[random_index]['label-coarse']
+            elif 'claim_label' in train_dataset[random_index]:
+                selected_label = train_dataset[random_index]['claim_label']
+            elif args.benchmark_name == 'ethos':
+                selected_label = train_dataset[random_index][args.task_name]
+            else:
+                selected_label = train_dataset[random_index]['label']
+
+            if random_index not in selected_index and selected_label in list(args.verbalizer.values()):
                 selected_index.append(random_index)
                 selected_count += 1
 
-                selected_label = train_dataset[random_index]['label']
                 sample_balance[selected_label] = sample_balance.get(selected_label, 0) + 1
 
             if selected_count == args.n_samples:

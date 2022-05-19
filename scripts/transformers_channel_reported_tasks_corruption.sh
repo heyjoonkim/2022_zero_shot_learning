@@ -10,24 +10,12 @@ seeds="13 21 42 87 100"
 
 n_samples="16"
 
-demo_accuracies="1 0.75 0.5 0.25 0"
+demo_accuracies="0.75 0.5 0.25 0"
 
 
-# # task #
-# task="trec"
-# benchmark="huggingface"
-
-# # select in-context samples from train set. (RANDOM)
-# for seed in $seeds; do
-# python generate_demonstrations.py \
-#     --task_name $task \
-#     --benchmark_name $benchmark \
-#     --model_name_or_path $main_model \
-#     --output_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-#     --seed $seed \
-#     --overwrite_output_dir \
-#     --n_samples $n_samples
-# done   
+# task #
+task="sentences_allagree"
+benchmark="financial_phrasebank"
 
 # ## Minimal template ##
 # # BALANCED # 
@@ -48,21 +36,42 @@ demo_accuracies="1 0.75 0.5 0.25 0"
 #     done
 # done
 
-# task #
-task="hate"
-benchmark="tweet_eval"
 
-# # select in-context samples from train set. (RANDOM)
+# # task #
+# task="sick"
+# benchmark="huggingface"
+
+# ## Minimal template ##
+# # BALANCED # 
 # for seed in $seeds; do
-# python generate_demonstrations.py \
-#     --task_name $task \
-#     --benchmark_name $benchmark \
-#     --model_name_or_path $main_model \
-#     --output_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-#     --seed $seed \
-#     --overwrite_output_dir \
-#     --n_samples $n_samples
-# done   
+#     for demo_accuracy in $demo_accuracies; do
+#         python transformers_channel_main.py \
+#             --task_name $task \
+#             --benchmark_name $benchmark \
+#             --model_name_or_path $main_model \
+#             --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
+#             --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal \
+#             --seed $seed \
+#             --demo_accuracy $demo_accuracy \
+#             --n_samples $n_samples \
+#             --overwrite_output_dir \
+#             --prefix '' \
+#             --postfix ''
+#     done
+# done
+
+
+
+
+seeds="21"
+
+n_samples="16"
+
+demo_accuracies="0.5"
+
+# task #
+task="medical_questions_pairs"
+benchmark="huggingface"
 
 ## Minimal template ##
 # BALANCED # 

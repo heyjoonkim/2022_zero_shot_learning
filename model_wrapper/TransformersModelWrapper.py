@@ -18,16 +18,16 @@ class GPT2Wrapper(torch.nn.Module):
 
         self._init_logger(args)
 
-        # self.transformer = AutoModelForCausalLM.from_pretrained(
-        #     model_name_or_path, 
-        #     revision="float16",             # specific model version to use. We use FP16 model
-        #     torch_dtype=torch.float16,  
-        #     low_cpu_mem_usage=True,         # keep RAM usage to 1x
-        # ).to(self.device)
-
         self.transformer = AutoModelForCausalLM.from_pretrained(
             model_name_or_path, 
+            revision="float16",             # specific model version to use. We use FP16 model
+            torch_dtype=torch.float16,  
+            low_cpu_mem_usage=True,         # keep RAM usage to 1x
         ).to(self.device)
+
+        # self.transformer = AutoModelForCausalLM.from_pretrained(
+        #     model_name_or_path, 
+        # ).to(self.device)
 
         # for zero/few-shot inference. 
         # No gradient updates
@@ -146,7 +146,7 @@ class GPT2Wrapper(torch.nn.Module):
         # shape : (1, input_sentence_token_length, vocab_size)
         label_logprobs = logprobs[:, -input_sentence_token_length:, :]
 
-        total_probs=0
+        total_probs=torch.tensor(0.0).to(self.device)
         for input_index, token_index in enumerate(input_sentence_tokens):
             token_logprob = label_logprobs[0, input_index, token_index]
             total_probs += token_logprob
@@ -191,7 +191,8 @@ class GPT2Wrapper(torch.nn.Module):
 
             input_ids_length = len(tokenized_inputs['input_ids'][0])
 
-            outputs = self.transformer(**tokenized_inputs)
+            with torch.no_grad():
+                outputs = self.transformer(**tokenized_inputs)
             
             # shape : (1, length, vocab_size)
             logits = outputs.logits
@@ -204,6 +205,7 @@ class GPT2Wrapper(torch.nn.Module):
 
             assert prediction_count == len(predictions), f'Prediction index : {prediction_count} <-> prediction count : {len(predictions)}'
             predictions.append(verbalizer_logprob)
+            # print(verbalizer_logprob)
 
             # for analysis #
             if input_ids_length > self.max_input_token:

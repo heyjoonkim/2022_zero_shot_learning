@@ -1,4 +1,5 @@
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=3
+
 
 
 # model #
@@ -18,17 +19,29 @@ demo_accuracies="1 0.75 0.5 0.25 0"
 task="sst2"
 benchmark="glue"
 
-# select in-context samples from train set. (RANDOM)
+## Minimal template ##
+# BALANCED # 
 for seed in $seeds; do
-python generate_demonstrations.py \
-    --task_name $task \
-    --benchmark_name $benchmark \
-    --model_name_or_path $main_model \
-    --output_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-    --seed $seed \
-    --overwrite_output_dir \
-    --n_samples $n_samples
-done   
+    for demo_accuracy in $demo_accuracies; do
+        python transformers_channel_main.py \
+            --task_name $task \
+            --benchmark_name $benchmark \
+            --model_name_or_path $main_model \
+            --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
+            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal-neutral \
+            --seed $seed \
+            --demo_accuracy $demo_accuracy \
+            --n_samples $n_samples \
+            --overwrite_output_dir \
+            --prefix '' \
+            --postfix ''
+    done
+done
+
+# task #
+task="trec"
+benchmark="huggingface"
+
 
 ## Minimal template ##
 # BALANCED # 
@@ -39,7 +52,7 @@ for seed in $seeds; do
             --benchmark_name $benchmark \
             --model_name_or_path $main_model \
             --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal \
+            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal-neutral \
             --seed $seed \
             --demo_accuracy $demo_accuracy \
             --n_samples $n_samples \
@@ -51,20 +64,8 @@ done
 
 
 # task #
-task="cb"
-benchmark="super_glue"
-
-# select in-context samples from train set. (RANDOM)
-for seed in $seeds; do
-python generate_demonstrations.py \
-    --task_name $task \
-    --benchmark_name $benchmark \
-    --model_name_or_path $main_model \
-    --output_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-    --seed $seed \
-    --overwrite_output_dir \
-    --n_samples $n_samples
-done   
+task="sick"
+benchmark="huggingface"
 
 ## Minimal template ##
 # BALANCED # 
@@ -75,7 +76,7 @@ for seed in $seeds; do
             --benchmark_name $benchmark \
             --model_name_or_path $main_model \
             --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal \
+            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal-neutral \
             --seed $seed \
             --demo_accuracy $demo_accuracy \
             --n_samples $n_samples \

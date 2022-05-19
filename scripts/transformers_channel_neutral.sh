@@ -15,20 +15,8 @@ n_samples="16"
 demo_accuracies="1 0.75 0.5 0.25 0"
 
 # task #
-task="sst2"
-benchmark="glue"
-
-# select in-context samples from train set. (RANDOM)
-for seed in $seeds; do
-python generate_demonstrations.py \
-    --task_name $task \
-    --benchmark_name $benchmark \
-    --model_name_or_path $main_model \
-    --output_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-    --seed $seed \
-    --overwrite_output_dir \
-    --n_samples $n_samples
-done   
+task="medical_questions_pairs"
+benchmark="huggingface"
 
 ## Minimal template ##
 # BALANCED # 
@@ -39,7 +27,7 @@ for seed in $seeds; do
             --benchmark_name $benchmark \
             --model_name_or_path $main_model \
             --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal \
+            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal-neutral \
             --seed $seed \
             --demo_accuracy $demo_accuracy \
             --n_samples $n_samples \
@@ -54,18 +42,6 @@ done
 task="cb"
 benchmark="super_glue"
 
-# select in-context samples from train set. (RANDOM)
-for seed in $seeds; do
-python generate_demonstrations.py \
-    --task_name $task \
-    --benchmark_name $benchmark \
-    --model_name_or_path $main_model \
-    --output_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-    --seed $seed \
-    --overwrite_output_dir \
-    --n_samples $n_samples
-done   
-
 ## Minimal template ##
 # BALANCED # 
 for seed in $seeds; do
@@ -75,7 +51,7 @@ for seed in $seeds; do
             --benchmark_name $benchmark \
             --model_name_or_path $main_model \
             --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal \
+            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal-neutral \
             --seed $seed \
             --demo_accuracy $demo_accuracy \
             --n_samples $n_samples \
