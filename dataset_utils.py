@@ -528,20 +528,21 @@ task_to_verbalizer = {
         # 'number':4,
         # 'location':5,
 
-        # 'DESC' : 0,
-        # 'ENTY' : 1,
-        # 'ABBR' : 2,
-        # 'HUM' : 3,
-        # 'NUM' : 4, 
-        # 'LOC' : 5,
+        # channel verbalizer
+        'DESC' : 0,
+        'ENTY' : 1,
+        'ABBR' : 2,
+        'HUM' : 3,
+        'NUM' : 4, 
+        'LOC' : 5,
 
         # neutral verbalizer
-        'i' : 0,
-        'g' : 1,
-        'w' : 2,
-        'x' : 3,
-        'c' : 4, 
-        'k' : 5,
+        # 'i' : 0,
+        # 'g' : 1,
+        # 'w' : 2,
+        # 'x' : 3,
+        # 'c' : 4, 
+        # 'k' : 5,
     },
     "cb": {
         # " true" : 0,
@@ -549,23 +550,23 @@ task_to_verbalizer = {
         # " neither" : 2,
         
         # channel verbalizer
-        # 'contradiction' : 1,
-        # 'entailment' : 0,
-        # 'neutral' : 2,
+        'contradiction' : 1,
+        'entailment' : 0,
+        'neutral' : 2,
 
         # neutral verbalizer
-        'x' : 1,
-        'm' : 0,
-        'h' : 2,
+        # 'x' : 1,
+        # 'm' : 0,
+        # 'h' : 2,
     },
     "sst2": {
         # channel verbalizer
-        # "negative" : 0,
-        # "positive" : 1,
+        "negative" : 0,
+        "positive" : 1,
 
         # neutral verbalizer
-        "r" : 0,
-        "s" : 1,
+        # "r" : 0,
+        # "s" : 1,
 
 
         # "bad" : 0,
@@ -574,8 +575,13 @@ task_to_verbalizer = {
         # "great" : 1,
     },
     "hate" : {
+        # channel verbalizer
         "non-hate" : 0,
         "hate" : 1,
+        
+        # neutral verbalizer
+        # "v" : 0,
+        # "n" : 1,
     },
     "poem_sentiment" :{
         "negative" : 0,
@@ -599,8 +605,13 @@ task_to_verbalizer = {
         # "car" : 1,
         # "bus" : 0,
 
+        # channel verbalizer
         "not_equivalent" : 0,
-        "equivalent" : 1
+        "equivalent" : 1,
+
+        # neutral verbalizer
+        # "f" : 0,
+        # "k" : 1
     },
     "wnli": {
         "not_entailment" : 0,
@@ -613,18 +624,25 @@ task_to_verbalizer = {
         # " No" : 1    # not entailment
         # "True" : 0,  # entailment
         # "False" : 1    # not entailment
+
+        # channel verbalizer
         "entailment" : 0,  # entailment
         "not_entailment" : 1    # not entailment
-    },
-    "sick" : {
-        # "entailment" : 0,
-        # "neutral" : 1,
-        # "contradiction" : 2,
 
         # neutral verbalizer
-        "o" : 0,
-        "k" : 1,
-        "m" : 2,
+        # "l" : 0,  # entailment
+        # "b" : 1    # not entailment
+    },
+    "sick" : {
+        # channel verbalizer
+        "entailment" : 0,
+        "neutral" : 1,
+        "contradiction" : 2,
+
+        # neutral verbalizer
+        # "o" : 0,
+        # "k" : 1,
+        # "m" : 2,
     },
     # tweet eval
     "stance_atheism" : {
@@ -645,12 +663,12 @@ task_to_verbalizer = {
         "positive": 2
     },
     "medical_questions_pairs" : {
-        # "similar": 1,
-        # "dissimilar": 0,
+        "similar": 1,
+        "dissimilar": 0,
 
         # neutral verbalizer
-        "d": 1,
-        "i": 0,
+        # "d": 1,
+        # "i": 0,
     },
     "climate_fever" : {
         "supports" : 0,
