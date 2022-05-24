@@ -20,6 +20,7 @@ class GPT2Wrapper(torch.nn.Module):
 
         self.transformer = AutoModelForCausalLM.from_pretrained(
             model_name_or_path, 
+            torch_dtype=torch.float16
         ).to(self.device)
 
         self.transformer.config.max_length = self.max_length
