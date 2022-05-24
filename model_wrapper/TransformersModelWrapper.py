@@ -54,7 +54,9 @@ class GPT2Wrapper(torch.nn.Module):
             self.calibrate = args.calibrate
             if self.calibrate:
                 self.zero_prompt_distribution = self._get_zero_prompt_distribution(args)
-    
+        else:
+            self.calibrate = None
+
     def _init_logger(self, args) -> None:
         logging.basicConfig(
             format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -121,11 +123,11 @@ class GPT2Wrapper(torch.nn.Module):
             # shape : (1, label-token-length, vocab_size)
             label_logprobs = logprobs[:, -label_length:, :]
             total_probs=0
-            for input_index, token_index in enumerate(label_tokens, start=1):
-                token_logprob = label_logprobs[0, -input_index, token_index]
+            for input_index, token_index in enumerate(label_tokens): #, start=1):
+                token_logprob = label_logprobs[0, input_index, token_index]
                 total_probs += token_logprob
             # TODO : normalize?
-            total_probs = total_probs / label_length
+            # total_probs = total_probs / label_length
         else:
             # single token verbalizer
             # use only the final distribution for prediction
@@ -225,8 +227,8 @@ class GPT2Wrapper(torch.nn.Module):
     def forward(
         self,
         input_sentence,
-        sentence1=None,
-        sentence2=None,
+        demonstrations,
+        sep, 
         labels=None,
         **kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -234,19 +236,39 @@ class GPT2Wrapper(torch.nn.Module):
         if self.multiple_token_flag:
             predictions = []
 
-            # same as noisy channel inference
-            for label_token, label_index in self.verbalizer.items():
+            
+            label_list = list(self.label2token.keys())
+            label_list.sort()
+
+            # logger.info(f'label list : {label_list}')
+
+            # same as channel inference
+            for prediction_count, label_index in enumerate(label_list):
+                label_token = self.label2token.get(label_index)
                 label_appended_input_sentence = input_sentence + label_token
+
+                demonstration_prepended_input_sentence = demonstrations + sep + label_appended_input_sentence
+                
+                # logger.info(f'*** INPUT with label {label_token}: {demonstration_prepended_input_sentence}')
+                
                 # tokenize label specific input sentence 
-                tokenized_inputs = self.tokenizer(label_appended_input_sentence, return_tensors='pt').to(self.device)
+                tokenized_inputs = self.tokenizer(demonstration_prepended_input_sentence, return_tensors='pt').to(self.device)
 
                 input_ids_length = len(tokenized_inputs['input_ids'][0])
 
                 if input_ids_length > self.max_length:
                     logger.info(f'* Input longer than max length {self.max_length}')
-                    logger.info(f'INPUT : {label_appended_input_sentence}')
+                    logger.info(f'INPUT : {demonstration_prepended_input_sentence}')
 
-                outputs = self.transformer(**tokenized_inputs)
+                # for analysis #
+                if input_ids_length > self.max_input_token:
+                    self.max_input_token = input_ids_length
+                if input_ids_length < self.min_input_token:
+                    self.min_input_token = input_ids_length
+                # for analysis #
+                
+                with torch.no_grad():
+                    outputs = self.transformer(**tokenized_inputs)
                 
                 # shape : (1, length, vocab_size)
                 logits = outputs.logits
@@ -262,15 +284,21 @@ class GPT2Wrapper(torch.nn.Module):
 
             predictions = torch.stack(predictions)
         else:
+            demonstration_prepended_input_sentence = demonstrations + sep + input_sentence
+                
+            
+            # logger.info(f'demonstration_prepended_input_sentence : {demonstration_prepended_input_sentence}')
+
             # tokenize label specific input sentence 
-            tokenized_inputs = self.tokenizer(input_sentence, return_tensors='pt').to(self.device)
+            tokenized_inputs = self.tokenizer(demonstration_prepended_input_sentence, return_tensors='pt').to(self.device)
             # print('input ids', len(tokenized_inputs['input_ids']))
+
 
             input_ids_length = len(tokenized_inputs['input_ids'][0])
 
             if input_ids_length > self.max_length:
                 logger.info(f'* Input longer than max length {self.max_length}')
-                logger.info(f'INPUT : {label_appended_input_sentence}')
+                logger.info(f'INPUT : {demonstration_prepended_input_sentence}')
 
             # for analysis #
             if input_ids_length > self.max_input_token:
@@ -301,6 +329,8 @@ class GPT2Wrapper(torch.nn.Module):
                 predictions = predictions - self.zero_prompt_distribution
 
         prediction = torch.argmax(predictions, dim=-1)
+
+        # exit()
 
         # shape : (1, )
         return prediction.unsqueeze(dim=0), predictions
