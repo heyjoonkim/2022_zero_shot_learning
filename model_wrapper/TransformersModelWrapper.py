@@ -13,18 +13,16 @@ class GPT2Wrapper(torch.nn.Module):
         super(GPT2Wrapper, self).__init__()
 
         self.config = config
-        self.max_length = config.n_positions
+        self.max_length = 2048
         self.device = torch.device("cuda")
 
         self._init_logger(args)
 
         self.transformer = AutoModelForCausalLM.from_pretrained(
             model_name_or_path, 
-            revision="float16",             # specific model version to use. We use FP16 model
-            torch_dtype=torch.float16,  
-            low_cpu_mem_usage=True,         # keep RAM usage to 1x
         ).to(self.device)
 
+        self.transformer.config.max_length = self.max_length
         # self.transformer = AutoModelForCausalLM.from_pretrained(
         #     model_name_or_path, 
         # ).to(self.device)

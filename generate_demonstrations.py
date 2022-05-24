@@ -33,12 +33,6 @@ def parse_args():
         choices=['glue', 'super_glue', 'huggingface', 'tweet_eval', 'financial_phrasebank', 'ethos'],
     )
     parser.add_argument(
-        "--model_name_or_path",
-        type=str,
-        help="Path to pretrained model or model identifier from huggingface.co/models.",
-        required=True,
-    )
-    parser.add_argument(
         "--output_dir", 
         type=str, 
         default=None, 
@@ -168,7 +162,6 @@ def main():
     logger.info(f"  Num TRAIN examples     = {len(train_dataset)}")
     logger.info(f"  Random Seed            = {args.seed}")
     logger.info(f"  K                      = {args.n_samples}")
-    logger.info(f"  Inference Model        = {args.model_name_or_path}")
     logger.info(f"  Balanced Demonstration = {args.balance_sample}")
 
 

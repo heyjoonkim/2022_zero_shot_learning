@@ -206,10 +206,6 @@ def main():
     raw_datasets['train'] = raw_train_dataset
     raw_datasets['validation'] = raw_eval_dataset
 
-
-
-    
-
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
 
@@ -311,18 +307,6 @@ def main():
     model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer, args=args)
     model_loading_end = time.time()
     logger.info(f'Total time for loading model : {model_loading_end - model_loading_start} sec.')
-      
-    # Get the metric function
-    # if args.task_name is not None and args.benchmark_name is not None:
-    #     if args.benchmark_name == 'huggingface' or args.benchmark_name == 'tweet_eval':
-    #         metric = load_metric("accuracy")
-    #     else:
-    #         metric = load_metric(args.benchmark_name, args.task_name)
-    # elif args.task_name is not None:
-    #         metric = load_metric("accuracy")
-    
-    accuracy = load_metric('accuracy')
-    f1 = load_metric('f1')
 
     # Evaluate! 
     logger.info("***** Zero/Few-shot Evaluation *****")
@@ -396,19 +380,6 @@ def main():
         prediction, predictions = model.channel_forward(**inputs)
         prediction = prediction.cpu()
             
-        # metric.add_batch(
-        #     predictions=prediction,
-        #     references=label,
-        # )
-        # accuracy.add_batch(
-        #     predictions=prediction,
-        #     references=label,
-        # )
-        # f1.add_batch(
-        #     predictions=prediction,
-        #     references=label,
-        # )
-
         # for analysis : save predictions
         prediction = prediction.item()
         prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
@@ -434,8 +405,6 @@ def main():
             f1s.append(2*precision*recall / (precision+recall))
     f1 = np.mean(f1s)
 
-    # accuracy_metric = accuracy.compute()
-    # f1_metric = f1.compute()
 
     max_token_length, min_token_length = model.get_token_length_analysis()
 
@@ -454,7 +423,7 @@ def main():
     logger.info("Done.")
                 
 if __name__ == "__main__":
-    logger.info('\nRunning : transformers_main.py')
+    logger.info('\nRunning : transformers_channel_main.py')
     
     start_time = time.time()
     main()

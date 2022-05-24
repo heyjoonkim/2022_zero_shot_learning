@@ -19,7 +19,7 @@ import torch
 
 from model_wrapper.TransformersModelWrapper import GPT2Wrapper
 from utils import save_config
-from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer, prepare_incontext_sampling, prepend_incontext_samples
+from dataset_utils import task_to_path, task_to_keys, task_to_verbalizer, no_validation_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -178,27 +178,52 @@ def main():
     # download the dataset.
     raw_datasets = DatasetDict()
     if args.task_name is not None and args.benchmark_name is not None:
-        if args.benchmark_name == 'huggingface':
+        if args.task_name in no_validation_tasks:
+            split = 'test' if args.task_name == 'climate_fever' else 'train'
+            # financial phrasebank
+            if args.task_name == 'sentences_allagree':
+                raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=split)
+            # ethos
+            elif args.benchmark_name == 'ethos':
+                raw_train_dataset = load_dataset(args.benchmark_name, 'multilabel', split=split)
+            # others
+            else:
+                raw_train_dataset = load_dataset(args.task_name, split=split)
+        # tasks from huggingface datasets with validation sets
+        elif args.benchmark_name == 'huggingface':
             raw_train_dataset = load_dataset(args.task_name, split='train')
-            raw_eval_dataset = load_dataset(args.task_name, split='test')
+            # raw_eval_dataset = load_dataset(args.task_name, split='test')
+            raw_eval_dataset = load_dataset(args.task_name, split='validation')
+        elif args.benchmark_name == 'tweet_eval':
+            raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split='train')
+            raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation')
         else:
             # Downloading and loading a dataset from the hub.
             raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
             raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'validation')
-    # for datasets from file.
-    elif args.task_name in task_to_path:
-        dataset_processor = task_to_path[args.task_name]["dataset_processor"]
-        train_file_path = task_to_path[args.task_name]["train"]
-        validation_file_path = task_to_path[args.task_name]["validation"]
-
-        # train set
-        train_dict = dataset_processor(train_file_path)
-        raw_train_dataset = Dataset.from_dict(train_dict)
-        # validation set
-        validation_dict = dataset_processor(validation_file_path)
-        raw_eval_dataset = Dataset.from_dict(validation_dict)
     else:
         raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
+
+    # we have to split the data into train/validation set 
+    if args.task_name in no_validation_tasks:
+        with open('validation_indices.pkl', 'rb') as fp:
+            validation_indices = pickle.load(fp)
+            task_key = args.task_name
+            if task_key == 'sentences_allagree':
+                task_key = 'financial_phrasebank'
+            elif args.benchmark_name == 'ethos':
+                task_key = args.benchmark_name
+            selected_validation_indices = validation_indices[task_key]
+            # print(selected_validation_indices)
+            # print(len(selected_validation_indices))
+            full_indices = list(range(len(raw_train_dataset)))
+            # print(len(full_indices))
+            train_indices = list(set(full_indices) - set(selected_validation_indices))
+            # print(len(train_indices))
+            filtered_raw_train_dataset = raw_train_dataset.select(train_indices)
+            raw_eval_dataset = raw_train_dataset.select(selected_validation_indices)
+            raw_train_dataset = filtered_raw_train_dataset
+
 
     raw_datasets['train'] = raw_train_dataset
     raw_datasets['validation'] = raw_eval_dataset

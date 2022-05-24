@@ -1,11 +1,8 @@
-transformers==4.3.0
-accelerate
+git+https://github.com/zphang/transformers.git@neox20b
 datasets
 tqdm
+--extra-index-url https://download.pytorch.org/whl/cu113
 torch
 scipy
 sklearn
 tensorboard
-sentence_transformers
-flask_cors
-flask
