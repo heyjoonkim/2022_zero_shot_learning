@@ -171,7 +171,10 @@ def main():
         elif args.benchmark_name == 'huggingface':
             raw_train_dataset = load_dataset(args.task_name, split='train')
             # raw_eval_dataset = load_dataset(args.task_name, split='test')
-            raw_eval_dataset = load_dataset(args.task_name, split='validation')
+            if args.task_name == 'trec':
+                raw_eval_dataset = load_dataset(args.task_name, split='test')
+            else:
+                raw_eval_dataset = load_dataset(args.task_name, split='validation')
         elif args.benchmark_name == 'tweet_eval':
             raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split='train')
             raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation')
@@ -362,10 +365,17 @@ def main():
 
                     # TODO : corruption code goes HERE
                     # we change label -> random label
+
+                    # TODO : we remove this part for random labeling
+                    # we use this part for corruption experiments
                     if random.random() > args.demo_accuracy:
                         labels = list(args.verbalizer.keys())
                         labels.remove(label)
                         label = random.choice(labels)
+
+                    # we use this part for random labeling
+                    # labels = list(args.verbalizer.keys())
+                    # label = random.choice(labels)
                     # until here # 
 
                     label_sentence = args.prefix + label + args.postfix
