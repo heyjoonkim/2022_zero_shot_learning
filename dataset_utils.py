@@ -427,15 +427,18 @@ generated_task_to_path = {
 
 task_to_keys = {
     # GLUE
-    "cola": ("sentence", None),
+    # for our paper
     "mnli": ("premise", "hypothesis"),
     "mrpc": ("sentence1", "sentence2"),
     "qnli": ("question", "sentence"),
     "qqp": ("question1", "question2"),
     "rte": ("sentence1", "sentence2"),
     "sst2": ("sentence", None),
-    "stsb": ("sentence1", "sentence2"),
     "wnli": ("sentence1", "sentence2"),
+    # others
+    "stsb": ("sentence1", "sentence2"),
+    "cola": ("sentence", None),
+
     # SuperGLUE
     "boolq" : ("question", "passage"),
     "cb" : ("premise", "hypothesis"),
@@ -452,7 +455,8 @@ task_to_keys = {
 }
 
 task_to_verbalizer = {
-    "cola": None,
+    # GLUE benchmark
+    # for our paper
     "mnli": None,
     "mrpc": None,
     "qnli": None,
@@ -475,14 +479,22 @@ task_to_verbalizer = {
         # "terrible" : 0,
         # "great" : 1,
     },
+    "wnli": None,
+
+    # other GLUE tasks
+    "cola": None,
+    "stsb": None,
+
+    
+    # TODO : remove other tasks?
+    # SuperGLUE
     "boolq": None,
     "cb": {
         " true" : 0,
         " false" : 1,
         " neither" : 2,
     },
-    "stsb": None,
-    "wnli": None,
+    # other tasks
     "mr": None,
     "cr": None,
     "mpqa": None,
