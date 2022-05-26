@@ -19,24 +19,24 @@ demo_accuracies="1 0.75 0.5 0.25 0"
 task="sst2"
 benchmark="glue"
 
-## Minimal template ##
-# BALANCED # 
-for seed in $seeds; do
-    for demo_accuracy in $demo_accuracies; do
-        python transformers_channel_main.py \
-            --task_name $task \
-            --benchmark_name $benchmark \
-            --model_name_or_path $main_model \
-            --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal-neutral \
-            --seed $seed \
-            --demo_accuracy $demo_accuracy \
-            --n_samples $n_samples \
-            --overwrite_output_dir \
-            --prefix '' \
-            --postfix ''
-    done
-done
+# ## Minimal template ##
+# # BALANCED # 
+# for seed in $seeds; do
+#     for demo_accuracy in $demo_accuracies; do
+#         python transformers_channel_main.py \
+#             --task_name $task \
+#             --benchmark_name $benchmark \
+#             --model_name_or_path $main_model \
+#             --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
+#             --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal-neutral \
+#             --seed $seed \
+#             --demo_accuracy $demo_accuracy \
+#             --n_samples $n_samples \
+#             --overwrite_output_dir \
+#             --prefix '' \
+#             --postfix ''
+#     done
+# done
 
 # task #
 task="trec"
@@ -52,7 +52,7 @@ for seed in $seeds; do
             --benchmark_name $benchmark \
             --model_name_or_path $main_model \
             --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal-neutral \
+            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-zero_shot-minimal \
             --seed $seed \
             --demo_accuracy $demo_accuracy \
             --n_samples $n_samples \
@@ -67,21 +67,21 @@ done
 task="sick"
 benchmark="huggingface"
 
-## Minimal template ##
-# BALANCED # 
-for seed in $seeds; do
-    for demo_accuracy in $demo_accuracies; do
-        python transformers_channel_main.py \
-            --task_name $task \
-            --benchmark_name $benchmark \
-            --model_name_or_path $main_model \
-            --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
-            --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal-neutral \
-            --seed $seed \
-            --demo_accuracy $demo_accuracy \
-            --n_samples $n_samples \
-            --overwrite_output_dir \
-            --prefix '' \
-            --postfix ''
-    done
-done
+# ## Minimal template ##
+# # BALANCED # 
+# for seed in $seeds; do
+#     for demo_accuracy in $demo_accuracies; do
+#         python transformers_channel_main.py \
+#             --task_name $task \
+#             --benchmark_name $benchmark \
+#             --model_name_or_path $main_model \
+#             --demonstration_dir $main_path/$benchmark-$task-seed_$seed-k_$n_samples \
+#             --output_dir $main_path/channel/$benchmark-$task-seed_$seed-k_$n_samples-correct_$demo_accuracy-minimal-neutral \
+#             --seed $seed \
+#             --demo_accuracy $demo_accuracy \
+#             --n_samples $n_samples \
+#             --overwrite_output_dir \
+#             --prefix '' \
+#             --postfix ''
+#     done
+# done
