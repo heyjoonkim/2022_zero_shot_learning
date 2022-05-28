@@ -1,8 +1,8 @@
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=0
 
 ## TASKS ##
-task="SetFit/sst5"
-benchmark="huggingface"
+task="wnli"
+benchmark="glue"
 
 ## MODELS ##
 # main_model="gpt2-xl"
@@ -19,8 +19,6 @@ dataset_path="./generated_datasets"
 ##############
 
 seeds="13 21 42 87 100"
-seeds="100"
-# seeds="13"
 
 n_samples="8"
 
@@ -28,7 +26,7 @@ n_samples="8"
 generation_template="template1"
 
 # inference template
-inference_template="template1"
+inference_template="template2"
 
 # Manual template #
 for n_sample in $n_samples; do
@@ -42,31 +40,31 @@ python transformers_generated_main.py \
     --seed $seed \
     --n_samples $n_sample \
     --overwrite_output_dir \
-    --prefix 'Review : ' \
+    --prefix 'Premise : ' \
     --infix '
-Sentiment :' \
-    --postfix ''
+Hypothesis : ' \
+    --postfix '
+True or False?'
     done
 done
 # Manual template #
 
-# Minimal template #
-for n_sample in $n_samples; do
-    for seed in $seeds; do
-python transformers_generated_main.py \
-    --task_name $task \
-    --benchmark_name $benchmark \
-    --model_name_or_path $main_model \
-    --output_dir $main_path/$task/$main_model/$n_samples-shot/generated-minimal/ \
-    --dataset_dir $dataset_path/$task/$main_model/$generation_template/$n_samples-shot/$seed/ \
-    --seed $seed \
-    --n_samples $n_sample \
-    --overwrite_output_dir \
-    --prefix '' \
-    --infix '
-' \
-    --postfix ''
-    done
-done
-# Minimal template #
-
+# # Minimal template #
+# for n_sample in $n_samples; do
+#     for seed in $seeds; do
+# python transformers_generated_main.py \
+#     --task_name $task \
+#     --benchmark_name $benchmark \
+#     --model_name_or_path $main_model \
+#     --output_dir $main_path/$task/$main_model/$n_samples-shot/generated-minimal/ \
+#     --dataset_dir $dataset_path/$task/$main_model/$generation_template/$n_samples-shot/$seed/ \
+#     --seed $seed \
+#     --n_samples $n_sample \
+#     --overwrite_output_dir \
+#     --prefix '' \
+#     --infix '
+# ' \
+#     --postfix ''
+#     done
+# done
+# # Minimal template #

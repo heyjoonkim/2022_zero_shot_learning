@@ -1,9 +1,7 @@
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
-
-## TASKS ##
-task="cb"
-benchmark="super_glue"
+task="rte"
+benchmark="glue"
 
 ## MODELS ##
 # main_model="gpt2-xl"
@@ -11,6 +9,7 @@ benchmark="super_glue"
 # main_model="EleutherAI/gpt-neo-2.7B"
 main_model="EleutherAI/gpt-j-6B"
 main_path="./test_results/paper_results"
+
 
 ##############
 ## FEW-SHOT ##
@@ -33,7 +32,7 @@ python transformers_main.py \
     --infix '
 Hypothesis : ' \
     --postfix '
-Yes, No, or Neither?'
+True or False? '
     done
 done
 
@@ -54,5 +53,3 @@ python transformers_main.py \
     --postfix ''
     done
 done
-
-

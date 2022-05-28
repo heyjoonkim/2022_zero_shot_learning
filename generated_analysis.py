@@ -37,12 +37,6 @@ def parse_args():
         help="A seed for reproducible training."
     )
     parser.add_argument(
-        '--ds_config', 
-        default='ds_config.json', 
-        type=str, 
-        help='deepspeed config'
-    )
-    parser.add_argument(
         '--local_rank', 
         default=0, 
         type=int, 
@@ -71,21 +65,6 @@ def parse_args():
 
     args = parser.parse_args()
     
-    # Sanity checks
-    if args.task_name is None and args.train_file is None and args.validation_file is None:
-        raise ValueError("Need either a task name or a training/validation file.")
-    elif args.task_name is None:
-        raise NotImplementedError('Tasks for GLUE benchmarks are implemented yet.')
-
-    # post init get batch and zero option from ds config
-    with open(args.ds_config, "r", encoding="utf-8") as ds_f:
-        ds_config = json.load(ds_f)
-    args.per_device_batch_size = ds_config['train_micro_batch_size_per_gpu']
-    args.gradient_accumulation_steps = ds_config['gradient_accumulation_steps']
-    if ds_config.get("zero_optimization"):
-        args.is_zero3 = ds_config["zero_optimization"]["stage"] == 3
-    else:
-        args.is_zero3 = False
 
     return args
 
@@ -101,7 +80,7 @@ def main():
     )
 
     # Setup logging, we only want one process per machine to log things on the screen.
-    logger.setLevel(logging.INFO if args.local_rank == 0 else logging.ERROR)
+    logger.setLevel(logging.INFO)
 
     args.verbalizer = task_to_verbalizer.get(args.task_name)
     args.label2token = {v:k for k,v in args.verbalizer.items()}
@@ -186,10 +165,9 @@ def main():
     eval_dataset = processed_datasets["validation"]
 
     # Evaluate! 
-    if args.local_rank == 0:
-        logger.info("***** Generated Dataset Analysis *****")
-        logger.info(f"  Num EVAL  examples = {len(eval_dataset)}")
-        logger.info(f"  Random Seed = {args.seed}")
+    logger.info("***** Generated Dataset Analysis *****")
+    logger.info(f"  Num EVAL  examples = {len(eval_dataset)}")
+    logger.info(f"  Random Seed = {args.seed}")
          
     
     start_time = time.time()

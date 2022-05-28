@@ -1,69 +1,89 @@
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=2
 
-# task="sst2"
-# task="rte"
-# benchmark="glue"
 
-# task="cb"
-# benchmark="super_glue"
-
-# task="sst5"
-# task="agnews"
-# task="yahoo"
-# task="yelp"
-task='trec'
-benchmark="huggingface"
-
+## MODELS ##
 # main_model="gpt2-xl"
 # main_model="EleutherAI/gpt-neo-1.3B"
 # main_model="EleutherAI/gpt-neo-2.7B"
 main_model="EleutherAI/gpt-j-6B"
-main_path="./test_results"
+main_path="./test_results/paper_results"
 
+###############
+## ZERO-SHOT ##
+###############
 seed="1"
 
-deepspeed transformers_main.py \
+task="sst2"
+benchmark="glue"
+
+# Minimal template #
+python transformers_main.py \
     --task_name $task \
     --model_name_or_path $main_model \
     --benchmark_name $benchmark \
-    --ds_config ds_configs/fp16.json \
-    --output_dir $main_path/$task/$main_model \
+    --output_dir $main_path/$task/$main_model/zero_shot/minimal/ \
     --seed $seed \
+    --n_samples 0 \
     --overwrite_output_dir \
         --prefix '' \
     --infix '
 ' \
     --postfix ''
-#     --prefix 'Question: ' \
-#     --infix '
-# Type:' \
-#     --postfix ''
-#     --prefix '' \
-#     --infix '
-# ' \
-#     --postfix ''
+# Minimal template #
+
+task="SetFit/sst5"
+benchmark="huggingface"
+
+# Minimal template #
+python transformers_main.py \
+    --task_name $task \
+    --model_name_or_path $main_model \
+    --benchmark_name $benchmark \
+    --output_dir $main_path/$task/$main_model/zero_shot/minimal/ \
+    --seed $seed \
+    --n_samples 0 \
+    --overwrite_output_dir \
+        --prefix '' \
+    --infix '
+' \
+    --postfix ''
+# Minimal template #
 
 
-# AG News
-#     --prefix 'Headline :' \
-#     --infix '
-# News : ' \
-#     --postfix '
-# Category :'
+task="trec"
+benchmark="huggingface"
 
-# RTE
-#     --prefix '' \
-#     --infix '
-# Question : ' \
-#     --postfix " True or False?
-# Answer :"
+# Minimal template #
+python transformers_main.py \
+    --task_name $task \
+    --model_name_or_path $main_model \
+    --benchmark_name $benchmark \
+    --output_dir $main_path/$task/$main_model/zero_shot/minimal/ \
+    --seed $seed \
+    --n_samples 0 \
+    --overwrite_output_dir \
+        --prefix '' \
+    --infix '
+' \
+    --postfix ''
+# Minimal template #
 
-    # SST-2
-    # --prefix 'Review: ' \
-    # --infix '\nSentiment: ' \
-    # --postfix ""
 
-    # CB
-    # --prefix ''
-    # --infix '\nQuestion: ' \
-    # --postfix " True, False or Neither?\nAnswer:"
+
+task="ag_news"
+benchmark="huggingface"
+
+# Minimal template #
+python transformers_main.py \
+    --task_name $task \
+    --model_name_or_path $main_model \
+    --benchmark_name $benchmark \
+    --output_dir $main_path/$task/$main_model/zero_shot/minimal/ \
+    --seed $seed \
+    --n_samples 0 \
+    --overwrite_output_dir \
+        --prefix '' \
+    --infix '
+' \
+    --postfix ''
+# Minimal template #

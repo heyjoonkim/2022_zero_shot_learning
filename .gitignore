@@ -1,5 +1,6 @@
 outputs/*
 # scripts/*
+generated_datasets_preliminary/*
 generated_datasets/*
 retrieved_datasets/*
 tmp/*

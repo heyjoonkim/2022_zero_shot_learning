@@ -9,8 +9,6 @@ import datasets
 from datasets import load_dataset, load_metric, DatasetDict, Dataset
 from tqdm.auto import tqdm
 
-import transformers
-from transformers.deepspeed import HfDeepSpeedConfig
 from transformers import (
     AutoConfig,
     AutoTokenizer,
@@ -42,32 +40,6 @@ def parse_args():
         choices=['glue', 'super_glue', 'huggingface'],
     )
     parser.add_argument(
-        "--train_file", 
-        type=str, 
-        default=None, 
-        help="A csv or a json file containing the training data."
-    )
-    parser.add_argument(
-        "--validation_file", 
-        type=str, 
-        default=None, 
-        help="A csv or a json file containing the validation data."
-    )
-    parser.add_argument(
-        "--max_length",
-        type=int,
-        default=1024,
-        help=(
-            "The maximum total input sequence length after tokenization. Sequences longer than this will be truncated,"
-            " sequences shorter will be padded if `--pad_to_max_lengh` is passed."
-        ),
-    )
-    parser.add_argument(
-        "--pad_to_max_length",
-        action="store_true",
-        help="If passed, pad all samples to `max_length`. Otherwise, dynamic padding is used.",
-    )
-    parser.add_argument(
         "--model_name_or_path",
         type=str,
         help="Path to pretrained model or model identifier from huggingface.co/models.",
@@ -90,18 +62,6 @@ def parse_args():
         type=int, 
         default=None, 
         help="A seed for reproducible training."
-    )
-    parser.add_argument(
-        '--ds_config', 
-        default='ds_config.json', 
-        type=str, 
-        help='deepspeed config'
-    )
-    parser.add_argument(
-        '--local_rank', 
-        default=0, 
-        type=int, 
-        help='node rank for distributed training'
     )
 
     # for Few-shot inference
@@ -136,40 +96,14 @@ def parse_args():
         default='',
         help="Postfix prompt.",
     )
-    # until here #
-    parser.add_argument(
-        '--explicit_label_space', 
-        default=False, 
-        action="store_true",
-        help='Explicitly show label space.'
-    )
 
     args = parser.parse_args()
     
-    # Sanity checks
-    if args.task_name is None and args.train_file is None and args.validation_file is None:
-        raise ValueError("Need either a task name or a training/validation file.")
-    elif args.task_name is None:
-        raise NotImplementedError('Tasks for GLUE benchmarks are implemented yet.')
-
-    # post init get batch and zero option from ds config
-    with open(args.ds_config, "r", encoding="utf-8") as ds_f:
-        ds_config = json.load(ds_f)
-    args.per_device_batch_size = ds_config['train_micro_batch_size_per_gpu']
-    args.gradient_accumulation_steps = ds_config['gradient_accumulation_steps']
-    if ds_config.get("zero_optimization"):
-        args.is_zero3 = ds_config["zero_optimization"]["stage"] == 3
-    else:
-        args.is_zero3 = False
-
     return args
 
 
 def main():
     args = parse_args()
-    dschf = HfDeepSpeedConfig(args.ds_config)
-    deepspeed.init_distributed()
-    args.world_size = torch.distributed.get_world_size()
 
     # Make one log on every process with the configuration for debugging.
     logging.basicConfig(
@@ -179,7 +113,7 @@ def main():
     )
 
     # Setup logging, we only want one process per machine to log things on the screen.
-    logger.setLevel(logging.INFO if args.local_rank == 0 else logging.ERROR)
+    logger.setLevel(logging.INFO)
 
     if args.output_dir is not None:
         if not os.path.isdir(args.output_dir):
@@ -197,79 +131,33 @@ def main():
 
     args.verbalizer = task_to_verbalizer.get(args.task_name)
 
-    if args.local_rank == 0:
-        datasets.utils.logging.set_verbosity_warning()
-        transformers.utils.logging.set_verbosity_info()
-    else:
-        datasets.utils.logging.set_verbosity_error()
-        transformers.utils.logging.set_verbosity_error()
-
     # If passed along, set the training seed now.
     if args.seed is not None:
         set_seed(args.seed)
         random.seed(args.seed)
 
     # Handle the repository creation & SummaryWriter
-    if args.local_rank == 0:
-        save_config(args)
+    save_config(args)
 
     # In distributed training, the load_dataset function guarantee that only one local process can concurrently
     # download the dataset.
     raw_datasets = DatasetDict()
     if args.task_name is not None and args.benchmark_name is not None:
+        # SST-5, TREC, AGNews
         if args.benchmark_name == 'huggingface':
             raw_train_dataset = load_dataset(args.task_name, split='train')
             raw_eval_dataset = load_dataset(args.task_name, split='test')
         else:
-            # Downloading and loading a dataset from the hub.
+            # glue, super_glue benchmarks
             raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
-            # for mnli 
-            if args.task_name == "mnli":
-                raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation_matched')
-            else:
-                raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'validation')
-    # for datasets from file.
-    elif args.task_name in task_to_path:
-        dataset_processor = task_to_path[args.task_name]["dataset_processor"]
-        train_file_path = task_to_path[args.task_name]["train"]
-        validation_file_path = task_to_path[args.task_name]["validation"]
-
-        # train set
-        train_dict = dataset_processor(train_file_path)
-        raw_train_dataset = Dataset.from_dict(train_dict)
-        # validation set
-        validation_dict = dataset_processor(validation_file_path)
-        raw_eval_dataset = Dataset.from_dict(validation_dict)
+            raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'validation')
     else:
         raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
 
     raw_datasets['train'] = raw_train_dataset
     raw_datasets['validation'] = raw_eval_dataset
-
-    # log dataset details
-    if args.local_rank == 0:
-        logger.info('TRAIN / VALIDATION split.')
-        for split, dataset in raw_datasets.items():
-            logger.info(f'{split} > {len(dataset)}')
-    
-    # Log a few random samples from the training set:
-    for index in random.sample(range(len(raw_train_dataset)), 1):
-        logger.info(f"Sample {index} of the training set: {raw_train_dataset[index]}.")
-    
-    # Labels
-    if args.task_name is not None and args.benchmark_name is not None:
-        if args.benchmark_name == 'huggingface':
-            # TODO : fix? only for TREC dataset
-            label_list = raw_datasets["train"].features["label-coarse"].names
-        else:
-            # label_list : ['entailment', 'not_entailment']
-            label_list = raw_datasets["train"].features["label"].names
-        num_labels = len(label_list)
-    elif args.task_name in task_to_path:
-        label_list = set(raw_datasets["train"]['label'])
-        num_labels = len(label_list)
-    else:
-        raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
+        
+    num_labels = len(args.verbalizer)
 
     # Load pretrained model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
@@ -285,10 +173,12 @@ def main():
         pad_token_id=tokenizer.unk_token_id
     )
 
-    model_loading_start = time.time()
+
+    logger.info(f'Start loading {args.model_name_or_path} model...')
+    model_loading_start_time = time.time()
     model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer)
-    model_loading_end = time.time()
-    logger.info(f'Total time for loading model : {model_loading_end - model_loading_start}')
+    model_loading_end_time = time.time()
+    logger.info(f'Total time for loading model : {model_loading_end_time - model_loading_start_time}')
 
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
@@ -334,8 +224,10 @@ def main():
             
             # Map labels to IDs (not necessary for GLUE tasks)
             if "label" in examples:
+                # SST-2, SST-5, AGNews
                 result["labels"] = examples["label"]
             elif 'label-coarse' in examples:
+                # TREC
                 result["labels"] = examples['label-coarse']
             else:
                 raise NotImplementedError
@@ -350,40 +242,28 @@ def main():
 
     train_dataset = processed_datasets["train"]
     eval_dataset = processed_datasets["validation"]
-
-    # Log a few random samples from the training set:
-    for index in random.sample(range(len(train_dataset)), 1):
-        logger.info(f"Sample {index} of the training set:")
-        logger.info(f'{train_dataset[index]}')
        
     # Get the metric function
     if args.task_name is not None and args.benchmark_name is not None:
         if args.benchmark_name == 'huggingface':
-            metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
+            metric = load_metric("accuracy")
         else:
-            metric = load_metric(args.benchmark_name, args.task_name, num_process=args.world_size, process_id=args.local_rank)
-    elif args.task_name is not None:
-        metric = load_metric("accuracy", num_process=args.world_size, process_id=args.local_rank)
+            metric = load_metric(args.benchmark_name, args.task_name)
 
-    # deepspeed initialize
-    model_engine, _, _, _ = deepspeed.initialize(model=model, optimizer=None, lr_scheduler=None, config_params=args.ds_config)
-    
     # Evaluate! 
-    if args.local_rank == 0:
-        logger.info("***** Zero/Few-shot Evaluation *****")
-        logger.info(f"  Num TRAIN examples = {len(train_dataset)}")
-        logger.info(f"  Num EVAL  examples = {len(eval_dataset)}")
-        logger.info(f"  Instantaneous batch size per device = {args.per_device_batch_size}")
-        logger.info(f"  World Size = {args.world_size}")
-        logger.info(f"  Random Seed = {args.seed}")
-        logger.info(f"  K = {args.n_samples}")
-        logger.info(f"  Inference Model = {args.model_name_or_path}")
+    logger.info("***** Zero/Few-shot Evaluation *****")
+    logger.info(f"  Task name           = {args.task_name}")
+    logger.info(f"  Num TRAIN examples  = {len(train_dataset)}")
+    logger.info(f"  Num EVAL  examples  = {len(eval_dataset)}")
+    logger.info(f"  Random Seed         = {args.seed}")
+    logger.info(f"  K                   = {args.n_samples}")
+    logger.info(f"  Inference Model     = {args.model_name_or_path}")
          
     # for analysis
     prediction_dict = {}
 
     start_time = time.time()
-    model_engine.eval()
+    model.eval()
 
     # we select a set of in-context samples
     # and use it as the in-context sample for all test dataset.
@@ -394,21 +274,18 @@ def main():
         balance_sample=args.balance_sample,
     )
 
-    # if args.explicit_label_space is True, prepend explicit prompt for providing label space informations
-    if args.explicit_label_space:
-        labels = list(args.verbalizer.keys())
-        labels = ' '.join(labels)
-        label_space = 'Types:' + labels
-        incontext_samples = label_space + sep + incontext_samples
-
     logger.info(f'=== in-context samples ===\n{incontext_samples}\n=====================')
         
-    for step, inputs in tqdm(enumerate(eval_dataset), disable=(args.local_rank != 0)):
+    progressbar = tqdm(range(len(eval_dataset)))
+    for step, inputs in enumerate(eval_dataset):
         # prepend in-context samples
         if args.n_samples > 0:
             inputs['input_sentence'] = incontext_samples + sep + inputs['input_sentence']
+
+        if step == 0:
+            logger.info(f'Print first input for debugging : \n{inputs["input_sentence"]}')
             
-        label = torch.tensor(inputs['labels']).to(model_engine.device).unsqueeze(dim=0)
+        label = torch.tensor(inputs['labels']).to('cuda').unsqueeze(dim=0)
 
         # prediction  : predicted label index
         # predictions : logit values for each label
@@ -422,6 +299,8 @@ def main():
         # for analysis : save predictions
         prediction = prediction.cpu().item()
         prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
+
+        progressbar.update(1)
 
     eval_metric = metric.compute()
 

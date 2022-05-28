@@ -1,8 +1,8 @@
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=2
 
 ## TASKS ##
-task="cb"
-benchmark="super_glue"
+task="ag_news"
+benchmark="huggingface"
 
 ## MODELS ##
 # main_model="gpt2-xl"
@@ -26,29 +26,27 @@ n_samples="8"
 generation_template="template1"
 
 # inference template
-inference_template="template6"
+inference_template="template2"
 
-# # Manual template #
-# for n_sample in $n_samples; do
-#     for seed in $seeds; do
-# python transformers_generated_main.py \
-#     --task_name $task \
-#     --benchmark_name $benchmark \
-#     --model_name_or_path $main_model \
-#     --output_dir $main_path/$task/$main_model/$n_samples-shot/generated-$inference_template/ \
-#     --dataset_dir $dataset_path/$task/$main_model/$generation_template/$n_samples-shot/$seed/ \
-#     --seed $seed \
-#     --n_samples $n_sample \
-#     --overwrite_output_dir \
-#     --prefix 'Premise : ' \
-#     --infix '
-# Hypothesis : ' \
-#     --postfix '
-# Yes, No, or Neither?'
-#     done
-# done
-# # Manual template #
-
+# Manual template #
+for n_sample in $n_samples; do
+    for seed in $seeds; do
+python transformers_generated_main.py \
+    --task_name $task \
+    --benchmark_name $benchmark \
+    --model_name_or_path $main_model \
+    --output_dir $main_path/$task/$main_model/$n_samples-shot/generated-$inference_template/ \
+    --dataset_dir $dataset_path/$task/$main_model/$generation_template/$n_samples-shot/$seed/ \
+    --seed $seed \
+    --n_samples $n_sample \
+    --overwrite_output_dir \
+    --prefix 'Article : ' \
+    --infix '
+Type :' \
+    --postfix ''
+    done
+done
+# Manual template #
 
 # Minimal template #
 for n_sample in $n_samples; do
@@ -69,3 +67,4 @@ python transformers_generated_main.py \
     done
 done
 # Minimal template #
+

@@ -11,14 +11,22 @@ class GPT2Wrapper(torch.nn.Module):
         super(GPT2Wrapper, self).__init__()
 
         self.config = config
+        self.device = torch.device("cuda")
 
         # Main model
-        self.transformer = AutoModelForCausalLM.from_pretrained(
-                                                            model_name_or_path,
-                                                            from_tf=bool(".ckpt" in model_name_or_path),
-                                                            config=config)
+        try:
+            self.transformer = AutoModelForCausalLM.from_pretrained(
+                model_name_or_path, 
+                revision="float16",             # specific model version to use. We use FP16 model
+                torch_dtype=torch.float16,  
+                low_cpu_mem_usage=True,         # keep RAM usage to 1x
+            ).to("cuda")     
+        except:
+            self.transformer = AutoModelForCausalLM.from_pretrained(
+                model_name_or_path, 
+            ).to("cuda")   
 
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, truncation_side='left')
 
         self.num_labels = config.num_labels
         # token -> label
@@ -120,10 +128,14 @@ class GPT2Wrapper(torch.nn.Module):
             predictions = torch.stack(predictions)
         else:
             # tokenize label specific input sentence 
-            tokenized_inputs = self.tokenizer(input_sentence, return_tensors='pt').to(self.transformer.device)
-            # print('input ids', len(tokenized_inputs['input_ids']))
-
-            outputs = self.transformer(**tokenized_inputs)
+            tokenized_inputs = self.tokenizer(input_sentence, truncation=True, max_length=2048, return_tensors='pt').to("cuda")
+            
+            with torch.no_grad():
+                try:
+                    outputs = self.transformer(**tokenized_inputs)
+                except:
+                    print(f'Error with input : {input_sentence}')
+                    print('input ids', len(tokenized_inputs['input_ids'][0]))
 
             del tokenized_inputs
             torch.cuda.empty_cache()

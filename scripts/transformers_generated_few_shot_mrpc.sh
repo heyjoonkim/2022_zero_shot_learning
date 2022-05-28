@@ -1,31 +1,42 @@
 export CUDA_VISIBLE_DEVICES=1
 
-
 ## TASKS ##
-task="cb"
-benchmark="super_glue"
+task="mrpc"
+benchmark="glue"
 
 ## MODELS ##
 # main_model="gpt2-xl"
 # main_model="EleutherAI/gpt-neo-1.3B"
 # main_model="EleutherAI/gpt-neo-2.7B"
 main_model="EleutherAI/gpt-j-6B"
+
+## directory ##
 main_path="./test_results/paper_results"
+dataset_path="./generated_datasets"
 
 ##############
 ## FEW-SHOT ##
 ##############
 
 seeds="13 21 42 87 100"
+
 n_samples="8"
 
+# generation template
+generation_template="template1"
+
+# inference template
+inference_template="template1"
+
+# Manual template #
 for n_sample in $n_samples; do
     for seed in $seeds; do
-python transformers_main.py \
+python transformers_generated_main.py \
     --task_name $task \
-    --model_name_or_path $main_model \
     --benchmark_name $benchmark \
-    --output_dir $main_path/$task/$main_model/$n_samples-shot/template1/ \
+    --model_name_or_path $main_model \
+    --output_dir $main_path/$task/$main_model/$n_samples-shot/generated-$inference_template/ \
+    --dataset_dir $dataset_path/$task/$main_model/$generation_template/$n_samples-shot/$seed/ \
     --seed $seed \
     --n_samples $n_sample \
     --overwrite_output_dir \
@@ -33,18 +44,20 @@ python transformers_main.py \
     --infix '
 Hypothesis : ' \
     --postfix '
-Yes, No, or Neither?'
+True or False? '
     done
 done
+# Manual template #
 
-
+# Minimal template #
 for n_sample in $n_samples; do
     for seed in $seeds; do
-python transformers_main.py \
+python transformers_generated_main.py \
     --task_name $task \
-    --model_name_or_path $main_model \
     --benchmark_name $benchmark \
-    --output_dir $main_path/$task/$main_model/$n_samples-shot/minimal/ \
+    --model_name_or_path $main_model \
+    --output_dir $main_path/$task/$main_model/$n_samples-shot/generated-minimal/ \
+    --dataset_dir $dataset_path/$task/$main_model/$generation_template/$n_samples-shot/$seed/ \
     --seed $seed \
     --n_samples $n_sample \
     --overwrite_output_dir \
@@ -54,5 +67,4 @@ python transformers_main.py \
     --postfix ''
     done
 done
-
-
+# Minimal template #

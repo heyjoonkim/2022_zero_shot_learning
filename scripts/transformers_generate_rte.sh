@@ -1,7 +1,7 @@
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=3
 
-task="cb"
-benchmark="super_glue"
+task="rte"
+benchmark="glue"
 
 
 # main_model="gpt2-xl"
@@ -26,7 +26,7 @@ for seed in $seeds; do
         --seed $seed \
         --n_samples $n_samples \
         --overwrite_output_dir \
-        --generation_max_length 10 \
+        --generation_max_length 25 \
         --generation_min_length 5 \
         --temperature 0.5 \
         --no_repeat_ngram_size 2 \

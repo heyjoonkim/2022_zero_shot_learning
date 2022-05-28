@@ -1,7 +1,7 @@
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=1
 
 ## TASKS ##
-task='trec'
+task="trec"
 benchmark="huggingface"
 
 ## MODELS ##
@@ -11,105 +11,77 @@ benchmark="huggingface"
 main_model="EleutherAI/gpt-j-6B"
 
 ## directory ##
-main_path="./test_results/OURS"
+main_path="./test_results/paper_results"
 dataset_path="./generated_datasets"
-
-## template number ##
-template="template11"
 
 ##############
 ## FEW-SHOT ##
 ##############
-seeds="1 2 3 4 5"
 
-n_samples="1 2 4 6 8 16"
-# n_samples="6"
+seeds="13 21 42 87 100"
+seeds="21 42 87 100"
+
+n_samples="8"
+
+# generation template
+generation_template="template1"
+
+# inference template
+inference_template="template1"
+inference_template="template2"
 
 # Manual template #
 for n_sample in $n_samples; do
     for seed in $seeds; do
-deepspeed transformers_generated_main.py \
+python transformers_generated_main.py \
     --task_name $task \
-    --model_name_or_path $main_model \
     --benchmark_name $benchmark \
-    --ds_config ds_configs/fp16.json \
-    --output_dir $main_path/$task/$main_model/$template/manual/balanced/ \
-    --dataset_dir $dataset_path/$task/$main_model/$template/$seed/ \
+    --model_name_or_path $main_model \
+    --output_dir $main_path/$task/$main_model/$n_samples-shot/generated-$inference_template/ \
+    --dataset_dir $dataset_path/$task/$main_model/$generation_template/$n_samples-shot/$seed/ \
     --seed $seed \
     --n_samples $n_sample \
-    --balance_sample \
     --overwrite_output_dir \
-    --apply_input \
-    --prefix 'Question: ' \
+    --prefix 'Question : ' \
     --infix '
-Type:' \
+Answer Type :' \
     --postfix ''
     done
 done
 # Manual template #
 
-# Manual template #
+# # Manual template #
 # for n_sample in $n_samples; do
 #     for seed in $seeds; do
-# deepspeed transformers_generated_main.py \
+# python transformers_generated_main.py \
 #     --task_name $task \
+#     --benchmark_name $benchmark \
 #     --model_name_or_path $main_model \
-#     --ds_config ds_configs/fp16.json \
-#     --output_dir $main_path/$task/$main_model/$template/manual/random/ \
-#     --dataset_dir $dataset_path/$task/$main_model/$template/$seed/ \
+#     --output_dir $main_path/$task/$main_model/$n_samples-shot/generated-$inference_template/ \
+#     --dataset_dir $dataset_path/$task/$main_model/$generation_template/$n_samples-shot/$seed/ \
 #     --seed $seed \
 #     --n_samples $n_sample \
 #     --overwrite_output_dir \
-#     --apply_input \
-#     --prefix 'Question: ' \
+#     --prefix 'Question : ' \
 #     --infix '
-# Type:' \
+# Type :' \
 #     --postfix ''
 #     done
 # done
-# Manual template #
-
-
-
-
-
-
-# Minimal template #
-for n_sample in $n_samples; do
-    for seed in $seeds; do
-deepspeed transformers_generated_main.py \
-    --task_name $task \
-    --model_name_or_path $main_model \
-    --benchmark_name $benchmark \
-    --ds_config ds_configs/fp16.json \
-    --output_dir $main_path/$task/$main_model/$template/minimal/balanced/ \
-    --dataset_dir $dataset_path/$task/$main_model/$template/$seed/ \
-    --seed $seed \
-    --n_samples $n_sample \
-    --balance_sample \
-    --overwrite_output_dir \
-    --apply_input \
-    --prefix '' \
-    --infix '
-' \
-    --postfix ''
-    done
-done
-# Minimal template #
+# # Manual template #
 
 # # Minimal template #
 # for n_sample in $n_samples; do
 #     for seed in $seeds; do
-# deepspeed transformers_generated_main.py \
+# python transformers_generated_main.py \
 #     --task_name $task \
+#     --benchmark_name $benchmark \
 #     --model_name_or_path $main_model \
-#     --ds_config ds_configs/fp16.json \
-#     --output_dir $main_path/$task/$main_model/template3/minimal/random/ \
-#     --dataset_dir $dataset_path/$task/$main_model/template3/$seed/ \
+#     --output_dir $main_path/$task/$main_model/$n_samples-shot/generated-minimal/ \
+#     --dataset_dir $dataset_path/$task/$main_model/$generation_template/$n_samples-shot/$seed/ \
 #     --seed $seed \
 #     --n_samples $n_sample \
 #     --overwrite_output_dir \
-#     --apply_input \
 #     --prefix '' \
 #     --infix '
 # ' \

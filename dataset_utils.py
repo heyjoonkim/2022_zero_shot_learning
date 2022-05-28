@@ -166,7 +166,7 @@ def yelp_generate_dataset_dict(filename):
     return return_dict
 
 task_to_path = {
-    "sst5" : {
+    "SetFit/sst5" : {
         "train" : "/home/heyjoonkim/data/datasets/sst5/train.csv",
         "validation" : "/home/heyjoonkim/data/datasets/sst5/test.csv",
         "dataset_processor" : sst5_generate_dataset_dict,
@@ -310,7 +310,7 @@ def generated_sst5_generate_dataset_dict(filename):
             samples4_list.append(samples4)
 
     return_dict = {
-        'sentence' : sentence1_list,
+        'text' : sentence1_list,
         'label' : label_list,
         'samples0' : samples0_list,
         'samples1' : samples1_list,
@@ -404,6 +404,184 @@ def generated_sst2_generate_dataset_dict(filename):
 
     return return_dict
 
+def generated_agnews_generate_dataset_dict(filename):
+    sentence1_list = []
+    label_list = []
+    samples0_list = []
+    samples1_list = []
+    samples2_list = []
+    samples3_list = []
+
+    with open(filename) as f:
+        tsv_reader = csv.reader(f, delimiter='\t')
+        for line_index, line in enumerate(tsv_reader):
+
+            assert len(line) == 8, f'Line length {len(line)} does not match the expected length 8.'
+            
+            index = int(line[0])
+            label = int(line[1])
+            sentence1 = line[2]
+
+            assert line_index == index, f'index {index} != line_index {line_index}'
+
+            # convert to list
+            samples0 = ast.literal_eval(line[3])
+            samples1 = ast.literal_eval(line[4])
+            samples2 = ast.literal_eval(line[5])
+            samples3 = ast.literal_eval(line[6])
+
+            # assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
+            # assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
+            # assert len(samples0) == len(samples3), f'number samples for label 0 {samples0} does not match the number of samples for label 3 {len(samples3)}'
+            # assert len(samples0) == len(samples4), f'number samples for label 0 {samples0} does not match the number of samples for label 4 {len(samples4)}'
+            
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+            samples0_list.append(samples0)
+            samples1_list.append(samples1)
+            samples2_list.append(samples2)
+            samples3_list.append(samples3)
+
+    return_dict = {
+        'sentence' : sentence1_list,
+        'label' : label_list,
+        'samples0' : samples0_list,
+        'samples1' : samples1_list,
+        'samples2' : samples2_list,
+        'samples3' : samples3_list,
+    }
+
+    return return_dict
+
+def generated_wnli_generate_dataset_dict(filename):
+    sentence1_list = []
+    sentence2_list = []
+    label_list = []
+    samples0_list = []
+    samples1_list = []
+
+    with open(filename) as f:
+        tsv_reader = csv.reader(f, delimiter='\t')
+        for line_index, line in enumerate(tsv_reader):
+
+            assert len(line) == 6, f'Line length {len(line)} does not match the expected length 6.'
+            
+            index = int(line[0])
+            label = int(line[1])
+            sentence1 = line[2]
+            sentence2 = line[3]
+
+            assert line_index == index, f'index {index} != line_index {line_index}'
+
+            # convert to list
+            samples0 = ast.literal_eval(line[4])
+            samples1 = ast.literal_eval(line[5])
+
+            # assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
+            # assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
+           
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+            sentence2_list.append(sentence2)
+            samples0_list.append(samples0)
+            samples1_list.append(samples1)
+
+    return_dict = {
+        'sentence1' : sentence1_list,
+        'sentence2' : sentence2_list,
+        'label' : label_list,
+        'samples0' : samples0_list,
+        'samples1' : samples1_list,
+    }
+
+    return return_dict
+
+def generated_rte_generate_dataset_dict(filename):
+    sentence1_list = []
+    sentence2_list = []
+    label_list = []
+    samples0_list = []
+    samples1_list = []
+
+    with open(filename) as f:
+        tsv_reader = csv.reader(f, delimiter='\t')
+        for line_index, line in enumerate(tsv_reader):
+
+            assert len(line) == 6, f'Line length {len(line)} does not match the expected length 6.'
+            
+            index = int(line[0])
+            label = int(line[1])
+            sentence1 = line[2]
+            sentence2 = line[3]
+
+            assert line_index == index, f'index {index} != line_index {line_index}'
+
+            # convert to list
+            samples0 = ast.literal_eval(line[4])
+            samples1 = ast.literal_eval(line[5])
+
+            # assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
+            # assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
+           
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+            sentence2_list.append(sentence2)
+            samples0_list.append(samples0)
+            samples1_list.append(samples1)
+
+    return_dict = {
+        'sentence1' : sentence1_list,
+        'sentence2' : sentence2_list,
+        'label' : label_list,
+        'samples0' : samples0_list,
+        'samples1' : samples1_list,
+    }
+
+    return return_dict
+
+def generated_mrpc_generate_dataset_dict(filename):
+    sentence1_list = []
+    sentence2_list = []
+    label_list = []
+    samples0_list = []
+    samples1_list = []
+
+    with open(filename) as f:
+        tsv_reader = csv.reader(f, delimiter='\t')
+        for line_index, line in enumerate(tsv_reader):
+
+            assert len(line) == 6, f'Line length {len(line)} does not match the expected length 6.'
+            
+            index = int(line[0])
+            label = int(line[1])
+            sentence1 = line[2]
+            sentence2 = line[3]
+
+            assert line_index == index, f'index {index} != line_index {line_index}'
+
+            # convert to list
+            samples0 = ast.literal_eval(line[4])
+            samples1 = ast.literal_eval(line[5])
+
+            # assert len(samples0) == len(samples1), f'number samples for label 0 {samples0} does not match the number of samples for label 1 {len(samples1)}'
+            # assert len(samples0) == len(samples2), f'number samples for label 0 {samples0} does not match the number of samples for label 2 {len(samples2)}'
+           
+            label_list.append(label)
+            sentence1_list.append(sentence1)
+            sentence2_list.append(sentence2)
+            samples0_list.append(samples0)
+            samples1_list.append(samples1)
+
+    return_dict = {
+        'sentence1' : sentence1_list,
+        'sentence2' : sentence2_list,
+        'label' : label_list,
+        'samples0' : samples0_list,
+        'samples1' : samples1_list,
+    }
+
+    return return_dict
+
 # for using generated datasets.
 generated_task_to_path = {
     
@@ -411,140 +589,204 @@ generated_task_to_path = {
         "validation" : "test.tsv",
         "dataset_processor" : generated_trec_generate_dataset_dict,
     },
-    "sst5" : {
+    "SetFit/sst5" : {
         "validation" : "test.tsv",
         "dataset_processor" : generated_sst5_generate_dataset_dict,
-    },
-    "cb" : {
-        "validation" : "test.tsv",
-        "dataset_processor" : generated_cb_generate_dataset_dict,
     },
     "sst2" : {
         "validation" : "test.tsv",
         "dataset_processor" : generated_sst2_generate_dataset_dict,
     },
+    "ag_news" : {
+        "validation" : "test.tsv",
+        "dataset_processor" : generated_agnews_generate_dataset_dict,
+    },
+    "mrpc" : {
+        "validation" : "test.tsv",
+        "dataset_processor" : generated_mrpc_generate_dataset_dict,
+    },
+    "rte" : {
+        "validation" : "test.tsv",
+        "dataset_processor" : generated_rte_generate_dataset_dict,
+    },
+    "wnli" : {
+        "validation" : "test.tsv",
+        "dataset_processor" : generated_wnli_generate_dataset_dict,
+    },
+    "cb" : {
+        "validation" : "test.tsv",
+        "dataset_processor" : generated_cb_generate_dataset_dict,
+    },
 }
 
 task_to_keys = {
-    # GLUE
     # for our paper
-    "mnli": ("premise", "hypothesis"),
+    "sst2": ("sentence", None),     # #labels = 2
+    "SetFit/sst5": ("text", None),         # #labels = 5
+    "trec": ("text", None),         # #labels = 6
+    "ag_news": ("text", None),      # #labels = 4
     "mrpc": ("sentence1", "sentence2"),
-    "qnli": ("question", "sentence"),
-    "qqp": ("question1", "question2"),
     "rte": ("sentence1", "sentence2"),
-    "sst2": ("sentence", None),
     "wnli": ("sentence1", "sentence2"),
-    # others
-    "stsb": ("sentence1", "sentence2"),
-    "cola": ("sentence", None),
-
-    # SuperGLUE
-    "boolq" : ("question", "passage"),
     "cb" : ("premise", "hypothesis"),
+
+    # "mnli": ("premise", "hypothesis"),
+    # "qnli": ("question", "sentence"),
+    # "qqp": ("question1", "question2"),
+    # "sst2": ("sentence", None),
     # others
-    "sst5": ("sentence", None),
-    "mr": ("sentence", None),
-    "cr": ("sentence", None),
-    "mpqa": ("sentence", None),
-    "subj": ("sentence", None),
-    "trec": ("text", None),
-    "agnews": ("sentence1", "sentence2"),
-    "yahoo": ("sentence1", "sentence2"),
-    "yelp": ("sentence", None),
+    # "stsb": ("sentence1", "sentence2"),
+    # "cola": ("sentence", None),
+
+    # others
+    # "boolq" : ("question", "passage"),
+    # "sst5": ("sentence", None),
+    # "mr": ("sentence", None),
+    # "cr": ("sentence", None),
+    # "mpqa": ("sentence", None),
+    # "subj": ("sentence", None),
+    # "trec": ("text", None),
+    # "agnews": ("sentence1", "sentence2"),
+    # "yahoo": ("sentence1", "sentence2"),
+    # "yelp": ("sentence", None),
 }
 
 task_to_verbalizer = {
-    # GLUE benchmark
     # for our paper
-    "mnli": None,
-    "mrpc": None,
-    "qnli": None,
-    "qqp": None,
-    "rte": {
-        # " positive" : 0,  # entailment
-        # " negative" : 1    # not entailment
-        # "entailment" : 0,  # entailment
-        # "not entailment" : 1    # not entailment
-        " Yes" : 0,  # entailment
-        " No" : 1    # not entailment
-        # "True" : 0,  # entailment
-        # "False" : 1    # not entailment
-    },
     "sst2": {
-        "negative" : 0,
-        "positive" : 1,
-        # "bad" : 0,
-        # "good" : 1,
-        # "terrible" : 0,
-        # "great" : 1,
+        # verbalizer 1
+        # "negative" : 0,
+        # "positive" : 1,
+
+        # verbalizer 2
+        " negative" : 0,
+        " positive" : 1,
     },
-    "wnli": None,
+    "SetFit/sst5" : {
+        # verbalizer 1
+        ' terrible' : 0,
+        ' bad' : 1,
+        ' okay' : 2,
+        ' good' : 3,
+        ' great' : 4,
+    },
+    "trec": {
+        # verbalizer 1
+        # 'description':0,
+        # 'entity':1,
+        # 'expression':2,
+        # 'human':3,
+        # 'number':4,
+        # 'location':5,
 
-    # other GLUE tasks
-    "cola": None,
-    "stsb": None,
+        # verbalizer 2
+        ' description':0,
+        ' entity':1,
+        ' expression':2,
+        ' human':3,
+        ' number':4,
+        ' location':5,
+    },
+    "ag_news": {
+        # verbalizer 1
+        # "world" : 0,
+        # "sports" : 1,
+        # "business" : 2,
+        # "technology" : 3,
+ 
+         # verbalizer 2
+        " world" : 0,
+        " sports" : 1,
+        " business" : 2,
+        " technology" : 3,
+    },
+    "wnli": {
+        # verbalizer 1
+        # " false" : 0,
+        # " true" : 1,
 
-    
-    # TODO : remove other tasks?
-    # SuperGLUE
-    "boolq": None,
-    "cb": {
+        # verbalizer 2
+        " no" : 0,
+        " yes" : 1,
+    },
+    "rte" : {
+        # verbalizer 1
         " true" : 0,
         " false" : 1,
+    },
+    "mrpc" : {
+        # verbalizer 1
+        " false" : 0,
+        " true" : 1,
+    },
+    "cb" : {
+        # verbalizer 1
+        # " true" : 0,
+        # " false" : 1,
+        # " neither" : 2,
+
+        # verbalizer 2
+        " yes" : 0,
+        " no" : 1,
         " neither" : 2,
-    },
-    # other tasks
-    "mr": None,
-    "cr": None,
-    "mpqa": None,
-    "subj": None,
-    "trec": {
-        # 'Description':0,
-        # 'Entity':1,
-        # 'Abbreviation':2, # or Expression
-        # 'Person':3, # or Human
-        # 'Number':4,
-        # 'Location':5,
-        'description':0,
-        'entity':1,
-        'expression':2,
-        'human':3,
-        'number':4,
-        'location':5,
-    },
-    "agnews": {
-        "World" : 0,
-        "Sports" : 1,
-        "Business" : 2,
-        "Tech" : 3,
-    },
-    "yahoo" : {
-        " Society" : 0,
-        " Science" : 1,
-        " Health" : 2,
-        " Education" : 3,
-        " Computer" : 4,
-        " Sports" : 5,
-        " Business" : 6,
-        " Entertainment" : 7,
-        " Relationship" : 8,
-        " Politics" : 9,
-    },
-    "yelp" : {
-        ' terrible' : 0,
-        ' bad' : 1,
-        ' okay' : 2,
-        ' good' : 3,
-        ' great' : 4,
-    },
-    "sst5" : {
-        ' terrible' : 0,
-        ' bad' : 1,
-        ' okay' : 2,
-        ' good' : 3,
-        ' great' : 4,
     }
+
+
+
+
+
+    # "mnli": None,
+    # "mrpc": None,
+    # "qnli": None,
+    # "qqp": None,
+    # "rte": {
+    #     # " positive" : 0,  # entailment
+    #     # " negative" : 1    # not entailment
+    #     # "entailment" : 0,  # entailment
+    #     # "not entailment" : 1    # not entailment
+    #     " Yes" : 0,  # entailment
+    #     " No" : 1    # not entailment
+    #     # "True" : 0,  # entailment
+    #     # "False" : 1    # not entailment
+    # },
+    # "wnli": None,
+
+    # # other GLUE tasks
+    # "cola": None,
+    # "stsb": None,
+
+    # # TODO : remove other tasks?
+    # # SuperGLUE
+    # "boolq": None,
+    # "cb": {
+    #     " true" : 0,
+    #     " false" : 1,
+    #     " neither" : 2,
+    # },
+    # # other tasks
+    # "mr": None,
+    # "cr": None,
+    # "mpqa": None,
+    # "subj": None,
+    # "yahoo" : {
+    #     " Society" : 0,
+    #     " Science" : 1,
+    #     " Health" : 2,
+    #     " Education" : 3,
+    #     " Computer" : 4,
+    #     " Sports" : 5,
+    #     " Business" : 6,
+    #     " Entertainment" : 7,
+    #     " Relationship" : 8,
+    #     " Politics" : 9,
+    # },
+    # "yelp" : {
+    #     ' terrible' : 0,
+    #     ' bad' : 1,
+    #     ' okay' : 2,
+    #     ' good' : 3,
+    #     ' great' : 4,
+    # },
 }
 
 
