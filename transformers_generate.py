@@ -208,15 +208,15 @@ def main():
 
     logger.info(f'Start loading {args.model_name_or_path} model...')
     model_loading_start_time = time.time()
-    # model = AutoModelForCausalLM.from_pretrained(
-    #         args.model_name_or_path, 
-    #         revision="float16",             # specific model version to use. We use FP16 model
-    #         torch_dtype=torch.float16,  
-    #         low_cpu_mem_usage=True,         # keep RAM usage to 1x
-    # ).to('cuda')
     model = AutoModelForCausalLM.from_pretrained(
             args.model_name_or_path, 
+            revision="float16",             # specific model version to use. We use FP16 model
+            torch_dtype=torch.float16,  
+            low_cpu_mem_usage=True,         # keep RAM usage to 1x
     ).to('cuda')
+    # model = AutoModelForCausalLM.from_pretrained(
+    #         args.model_name_or_path, 
+    # ).to('cuda')
     model_loading_end_time = time.time()
     logger.info(f'Total time for loading model : {model_loading_end_time - model_loading_start_time}')
 
@@ -290,8 +290,10 @@ def main():
             sentence1 = inputs['sentence1']
             sentence2 = inputs['sentence2'] if 'sentence2' in inputs else ''
 
+            # TODO : revert?
             # original input with manually selected prompts
-            original_input = args.prefix + sentence1 + args.infix + sentence2 + args.postfix
+            # original_input = args.prefix + sentence1 + args.infix + sentence2 + args.postfix
+            original_input = args.prefix + args.infix + sentence2 + args.postfix
 
             # gold label for the input
             label = inputs['labels']
