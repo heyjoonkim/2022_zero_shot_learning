@@ -17,7 +17,7 @@ main_path="./test_results/paper_results"
 
 seeds="13 21 42 87 100"
 n_samples="8"
-n_samples="1 2 4 16"
+n_samples="3 5 7 6"
 
 for n_sample in $n_samples; do
     for seed in $seeds; do
