@@ -13,21 +13,22 @@ class GPT2Wrapper(torch.nn.Module):
         super(GPT2Wrapper, self).__init__()
 
         self.config = config
-        self.max_length = config.n_positions
+        # self.max_length = config.n_positions
         self.device = torch.device("cuda")
 
         self._init_logger(args)
 
-        self.transformer = AutoModelForCausalLM.from_pretrained(
-            model_name_or_path, 
-            revision="float16",             # specific model version to use. We use FP16 model
-            torch_dtype=torch.float16,  
-            low_cpu_mem_usage=True,         # keep RAM usage to 1x
-        ).to(self.device)
-
         # self.transformer = AutoModelForCausalLM.from_pretrained(
         #     model_name_or_path, 
+        #     revision="float16",             # specific model version to use. We use FP16 model
+        #     torch_dtype=torch.float16,  
+        #     low_cpu_mem_usage=True,         # keep RAM usage to 1x
         # ).to(self.device)
+
+        self.transformer = AutoModelForCausalLM.from_pretrained(
+            model_name_or_path, 
+            torch_dtype=torch.float16,  
+        ).to(self.device)
 
         # for zero/few-shot inference. 
         # No gradient updates
@@ -162,7 +163,6 @@ class GPT2Wrapper(torch.nn.Module):
         sep, 
         prefix,
         postfix,
-        labels=None,
         **kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
@@ -229,7 +229,6 @@ class GPT2Wrapper(torch.nn.Module):
         input_sentence,
         demonstrations,
         sep, 
-        labels=None,
         **kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
@@ -256,9 +255,9 @@ class GPT2Wrapper(torch.nn.Module):
 
                 input_ids_length = len(tokenized_inputs['input_ids'][0])
 
-                if input_ids_length > self.max_length:
-                    logger.info(f'* Input longer than max length {self.max_length}')
-                    logger.info(f'INPUT : {demonstration_prepended_input_sentence}')
+                # if input_ids_length > self.max_length:
+                #     logger.info(f'* Input longer than max length {self.max_length}')
+                #     logger.info(f'INPUT : {demonstration_prepended_input_sentence}')
 
                 # for analysis #
                 if input_ids_length > self.max_input_token:
@@ -284,7 +283,7 @@ class GPT2Wrapper(torch.nn.Module):
 
             predictions = torch.stack(predictions)
         else:
-            demonstration_prepended_input_sentence = demonstrations + sep + input_sentence
+            demonstration_prepended_input_sentence = demonstrations + sep + input_sentence + '\n'
                 
             
             # logger.info(f'demonstration_prepended_input_sentence : {demonstration_prepended_input_sentence}')
@@ -296,9 +295,9 @@ class GPT2Wrapper(torch.nn.Module):
 
             input_ids_length = len(tokenized_inputs['input_ids'][0])
 
-            if input_ids_length > self.max_length:
-                logger.info(f'* Input longer than max length {self.max_length}')
-                logger.info(f'INPUT : {demonstration_prepended_input_sentence}')
+            # if input_ids_length > self.max_length:
+            #     logger.info(f'* Input longer than max length {self.max_length}')
+            #     logger.info(f'INPUT : {demonstration_prepended_input_sentence}')
 
             # for analysis #
             if input_ids_length > self.max_input_token:

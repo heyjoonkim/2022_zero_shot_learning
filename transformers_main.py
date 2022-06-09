@@ -48,10 +48,16 @@ def parse_args():
         required=True,
     )
     parser.add_argument(
-        "--demonstration_dir", 
-        type=str, 
-        default=None, 
-        help="Where to load the demonstration indices."
+        "--train_set",
+        type=str,
+        help="Path for train set.",
+        required=True,
+    )
+    parser.add_argument(
+        "--test_set",
+        type=str,
+        help="Path for test set.",
+        required=True,
     )
     parser.add_argument(
         "--output_dir", 
@@ -158,66 +164,18 @@ def main():
     # Handle the repository creation & SummaryWriter
     save_config(args)
 
-    # In distributed training, the load_dataset function guarantee that only one local process can concurrently
-    # download the dataset.
+    # load dataset
     raw_datasets = DatasetDict()
-    if args.task_name is not None and args.benchmark_name is not None:
-        if args.task_name in no_validation_tasks:
-            split = 'test' if args.task_name == 'climate_fever' else 'train'
-            # financial phrasebank
-            if args.task_name == 'sentences_allagree':
-                raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=split)
-            # ethos
-            elif args.benchmark_name == 'ethos':
-                raw_train_dataset = load_dataset(args.benchmark_name, 'multilabel', split=split)
-            # others
-            else:
-                raw_train_dataset = load_dataset(args.task_name, split=split)
-        # tasks from huggingface datasets with validation sets
-        elif args.benchmark_name == 'huggingface':
-            raw_train_dataset = load_dataset(args.task_name, split='train')
-            # raw_eval_dataset = load_dataset(args.task_name, split='test')
-            if args.task_name == 'trec':
-                raw_eval_dataset = load_dataset(args.task_name, split='test')
-            else:
-                raw_eval_dataset = load_dataset(args.task_name, split='validation')
-        elif args.benchmark_name == 'tweet_eval':
-            raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split='train')
-            raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split='validation')
-        else:
-            # Downloading and loading a dataset from the hub.
-            raw_train_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'train')
-            raw_eval_dataset = load_dataset(args.benchmark_name, args.task_name, split=f'validation')
-    else:
-        raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
-
-    # we have to split the data into train/validation set 
-    if args.task_name in no_validation_tasks:
-        with open('validation_indices.pkl', 'rb') as fp:
-            validation_indices = pickle.load(fp)
-            task_key = args.task_name
-            if task_key == 'sentences_allagree':
-                task_key = 'financial_phrasebank'
-            elif args.benchmark_name == 'ethos':
-                task_key = args.benchmark_name
-            selected_validation_indices = validation_indices[task_key]
-            # print(selected_validation_indices)
-            # print(len(selected_validation_indices))
-            full_indices = list(range(len(raw_train_dataset)))
-            # print(len(full_indices))
-            train_indices = list(set(full_indices) - set(selected_validation_indices))
-            # print(len(train_indices))
-            filtered_raw_train_dataset = raw_train_dataset.select(train_indices)
-            raw_eval_dataset = raw_train_dataset.select(selected_validation_indices)
-            raw_train_dataset = filtered_raw_train_dataset
-
-    raw_datasets['train'] = raw_train_dataset
-    raw_datasets['validation'] = raw_eval_dataset
-
+    raw_datasets['train'] = load_dataset('json', data_files=args.train_set)['train']
+    raw_datasets['validation'] = load_dataset('json', data_files=args.test_set)['train']
     
     # Preprocessing the datasets
-    sentence1_key, sentence2_key = task_to_keys[args.task_name]
+    # sentence1_key, sentence2_key = task_to_keys[args.task_name]
+    sentence1_key, sentence2_key, label_key = 'sentence1', 'sentence2', 'label'
 
+    if sentence2_key not in raw_datasets['train']:
+        sentence2_key = None
+    
     def preprocess_function(examples):
         # Tokenize the texts
         texts = (
@@ -231,8 +189,9 @@ def main():
                 (examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key])
             )
             result = dict()
+            result[sentence1_key] = examples[sentence1_key]
+
             sample_num = len(texts[0])
-            result['sentence1'] = examples[sentence1_key]
             input_sentences = []
 
             # for single sentence tasks
@@ -240,25 +199,15 @@ def main():
                 for sample_index in range(sample_num):
                     input_sentences.append(texts[0][sample_index])
             else:
-                result['sentence2'] = examples[sentence2_key]
+                result[sentence2_key] = examples[sentence2_key]
                 for sample_index in range(sample_num):
                     # TODO : fix?
                     input_sentence = args.prefix + texts[0][sample_index] + args.infix + texts[1][sample_index] + args.postfix
                     input_sentences.append(input_sentence)
 
             result['input_sentence'] = input_sentences
+            result[label_key] = examples[label_key]
             
-            # Map labels to IDs (not necessary for GLUE tasks)
-            if 'claim_label' in examples:
-                result["labels"] = examples["claim_label"]
-            elif args.benchmark_name == 'ethos':
-                result["labels"] = examples[args.task_name]
-            elif 'label-coarse' in examples:
-                result["labels"] = examples['label-coarse']
-            elif "label" in examples:
-                result["labels"] = examples["label"]
-            else:
-                raise NotImplementedError
             return result
 
     processed_datasets = raw_datasets.map(
@@ -275,7 +224,6 @@ def main():
     logger.info('TRAIN / VALIDATION split.')
     logger.info(f'TRAIN > {len(train_dataset)}')
     logger.info(f'EVAL  > {len(eval_dataset)}')
-
 
     num_labels = len(args.verbalizer)
 
@@ -318,42 +266,24 @@ def main():
 
     # get in-context samples
     if args.n_samples > 0:
-        demonstration_file = os.path.join(args.demonstration_dir, 'demonstration_indices.pkl')
-    
-        logger.info('Loading demonstration indices...')
-        if os.path.exists(demonstration_file):
-            with open(demonstration_file,'rb') as f:
-                selected_indices = pickle.load(f)
-                assert len(selected_indices) == args.n_samples, f'{len(selected_indices)} != {args.n_samples}'
-                logger.info(f'Selected indices : {selected_indices}')
 
-                demonstrations_list = []
-                for selected_index in selected_indices:
-                    selected_sample = train_dataset[selected_index]
-                    logger.info(f'selected_sample : {selected_sample}')
-                    sentence1 = selected_sample['sentence1']
-                    sentence2 = selected_sample['sentence2'] if 'sentence2' in selected_sample else ''
-                    label_index = selected_sample['labels']
-                    label = args.label2token[label_index]
+        demonstrations_list = []
+        for train_sample in train_dataset:
+            sentence1 = train_sample[sentence1_key]
+            sentence2 = train_sample[sentence2_key] if sentence2_key is not None else ''
+            label_index = train_sample[label_key]
+            label = args.label2token[label_index]
 
-                    # TODO : corruption code goes HERE
-                    # we change label -> random label
+            # TODO : we remove this part for random labeling
+            # we use this part for corruption experiments
+            if random.random() > args.demo_accuracy:
+                labels = list(args.verbalizer.keys())
+                labels.remove(label)
+                label = random.choice(labels)
 
-                    # TODO : we remove this part for random labeling
-                    # we use this part for corruption experiments
-                    if random.random() > args.demo_accuracy:
-                        labels = list(args.verbalizer.keys())
-                        labels.remove(label)
-                        label = random.choice(labels)
-
-                    # we use this part for random labeling
-                    # labels = list(args.verbalizer.keys())
-                    # label = random.choice(labels)
-                    # until here # 
-
-                    demonstration = args.prefix + sentence1 + args.infix + sentence2 + args.postfix + label
-                    demonstrations_list.append(demonstration)
-                demonstrations = sep.join(demonstrations_list)
+            demonstration = args.prefix + sentence1 + args.infix + sentence2 + args.postfix + label
+            demonstrations_list.append(demonstration)
+        demonstrations = sep.join(demonstrations_list)
 
     logger.info(f'=== in-context samples ===\n{demonstrations}\n=====================')
 
@@ -366,7 +296,7 @@ def main():
         inputs['sep'] = sep
             
         # label = torch.tensor(inputs['labels']).unsqueeze(dim=0)
-        label = inputs['labels']
+        label = inputs[label_key]
 
         # prediction  : predicted label index
         # predictions : logit values for each label
