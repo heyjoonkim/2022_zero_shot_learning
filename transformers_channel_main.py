@@ -7,10 +7,10 @@ import pickle
 
 import datasets
 from collections import defaultdict
-from datasets import load_dataset, load_metric, DatasetDict, Dataset
+from datasets import load_dataset, load_metric, DatasetDict
 from tqdm.auto import tqdm
-
 import numpy as np
+
 import transformers
 from transformers import (
     AutoConfig,
@@ -86,12 +86,6 @@ def parse_args():
         type=str,
         default='',
         help="Prefix prompt.",
-    )
-    parser.add_argument(
-        "--infix",
-        type=str,
-        default='',
-        help="Infix prompt.",
     )
     parser.add_argument(
         "--postfix",
@@ -211,10 +205,14 @@ def main():
             raw_eval_dataset = raw_train_dataset.select(selected_validation_indices)
             raw_train_dataset = filtered_raw_train_dataset
 
+
     raw_datasets['train'] = raw_train_dataset
     raw_datasets['validation'] = raw_eval_dataset
 
+
+
     
+
     # Preprocessing the datasets
     sentence1_key, sentence2_key = task_to_keys[args.task_name]
 
@@ -243,7 +241,7 @@ def main():
                 result['sentence2'] = examples[sentence2_key]
                 for sample_index in range(sample_num):
                     # TODO : fix?
-                    input_sentence = args.prefix + texts[0][sample_index] + args.infix + texts[1][sample_index] + args.postfix
+                    input_sentence = texts[0][sample_index] + '\n' + texts[1][sample_index]
                     input_sentences.append(input_sentence)
 
             result['input_sentence'] = input_sentences
@@ -268,16 +266,34 @@ def main():
         desc="Preprocessing datasets...",
     )
 
+
     train_dataset = processed_datasets["train"]
     eval_dataset = processed_datasets["validation"]
+
+    # train_dataset = train_dataset.filter(lambda example: example['labels'] in args.verbalizer.values())
+    # eval_dataset = eval_dataset.filter(lambda example: example['labels'] in args.verbalizer.values())
 
     # log dataset details
     logger.info('TRAIN / VALIDATION split.')
     logger.info(f'TRAIN > {len(train_dataset)}')
     logger.info(f'EVAL  > {len(eval_dataset)}')
 
-
+        
     num_labels = len(args.verbalizer)
+    # # Labels
+    # if args.task_name is not None and args.benchmark_name is not None:
+    #     if args.benchmark_name == 'huggingface':
+    #         if "label-coarse" in raw_datasets['train'].features:
+    #         # TODO : fix? only for TREC dataset
+    #             label_list = raw_datasets["train"].features["label-coarse"].names
+    #         else:
+    #             label_list = raw_datasets["train"].features["label"].names
+    #     else:
+    #         # label_list : ['entailment', 'not_entailment']
+    #         label_list = raw_datasets["train"].features["label"].names
+    #     num_labels = len(label_list)
+    # else:
+    #     raise NotImplementedError(f'{args.task_name} task is not implemented yet.')
 
     # Load pretrained model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
@@ -298,6 +314,18 @@ def main():
     model = GPT2Wrapper(config=config, model_name_or_path=args.model_name_or_path, verbalizer=args.verbalizer, args=args)
     model_loading_end = time.time()
     logger.info(f'Total time for loading model : {model_loading_end - model_loading_start} sec.')
+      
+    # Get the metric function
+    # if args.task_name is not None and args.benchmark_name is not None:
+    #     if args.benchmark_name == 'huggingface' or args.benchmark_name == 'tweet_eval':
+    #         metric = load_metric("accuracy")
+    #     else:
+    #         metric = load_metric(args.benchmark_name, args.task_name)
+    # elif args.task_name is not None:
+    #         metric = load_metric("accuracy")
+    
+    accuracy = load_metric('accuracy')
+    f1 = load_metric('f1')
 
     # Evaluate! 
     logger.info("***** Zero/Few-shot Evaluation *****")
@@ -331,8 +359,7 @@ def main():
                 for selected_index in selected_indices:
                     selected_sample = train_dataset[selected_index]
                     logger.info(f'selected_sample : {selected_sample}')
-                    sentence1 = selected_sample['sentence1']
-                    sentence2 = selected_sample['sentence2'] if 'sentence2' in selected_sample else ''
+                    input_sentence = selected_sample['input_sentence']
                     label_index = selected_sample['labels']
                     label = args.label2token[label_index]
 
@@ -351,12 +378,15 @@ def main():
                     # label = random.choice(labels)
                     # until here # 
 
-                    demonstration = args.prefix + sentence1 + args.infix + sentence2 + args.postfix + label
+                    label_sentence = args.prefix + label + args.postfix
+
+                    demonstration = label_sentence + '\n' + input_sentence
                     demonstrations_list.append(demonstration)
                 demonstrations = sep.join(demonstrations_list)
 
     logger.info(f'=== in-context samples ===\n{demonstrations}\n=====================')
-
+        
+    
     accs = []
     precisions = defaultdict(list)
     recalls = defaultdict(list)
@@ -364,15 +394,31 @@ def main():
     for step, inputs in enumerate(eval_dataset):
         inputs['demonstrations'] = demonstrations
         inputs['sep'] = sep
+        # for channel inference
+        inputs['prefix'] = args.prefix
+        inputs['postfix'] = args.postfix
             
         # label = torch.tensor(inputs['labels']).unsqueeze(dim=0)
         label = inputs['labels']
 
         # prediction  : predicted label index
         # predictions : logit values for each label
-        prediction, predictions = model(**inputs)
+        prediction, predictions = model.channel_forward(**inputs)
         prediction = prediction.cpu()
-        
+            
+        # metric.add_batch(
+        #     predictions=prediction,
+        #     references=label,
+        # )
+        # accuracy.add_batch(
+        #     predictions=prediction,
+        #     references=label,
+        # )
+        # f1.add_batch(
+        #     predictions=prediction,
+        #     references=label,
+        # )
+
         # for analysis : save predictions
         prediction = prediction.item()
         prediction_dict[prediction] = prediction_dict.get(prediction, 0) + 1
@@ -387,7 +433,6 @@ def main():
         recalls[label].append(is_correct)
         precisions[prediction].append(is_correct)
 
-
     acc = np.mean(accs)
     f1s = []
     for key in recalls:
@@ -398,6 +443,9 @@ def main():
         else:
             f1s.append(2*precision*recall / (precision+recall))
     f1 = np.mean(f1s)
+
+    # accuracy_metric = accuracy.compute()
+    # f1_metric = f1.compute()
 
     max_token_length, min_token_length = model.get_token_length_analysis()
 

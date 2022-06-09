@@ -429,19 +429,11 @@ task_to_keys = {
     # GLUE
     # for our paper
     "mnli": ("premise", "hypothesis"),
-    "mrpc": ("sentence1", "sentence2"),
     "qnli": ("question", "sentence"),
     "qqp": ("question1", "question2"),
-    "rte": ("sentence1", "sentence2"),
-    "sst2": ("sentence", None),
-    "wnli": ("sentence1", "sentence2"),
-    # others
     "stsb": ("sentence1", "sentence2"),
-    "cola": ("sentence", None),
-
     # SuperGLUE
     "boolq" : ("question", "passage"),
-    "cb" : ("premise", "hypothesis"),
     # others
     "sst5": ("sentence", None),
     "mr": ("sentence", None),
@@ -452,67 +444,42 @@ task_to_keys = {
     "agnews": ("sentence1", "sentence2"),
     "yahoo": ("sentence1", "sentence2"),
     "yelp": ("sentence", None),
+
+    # REPORTED TASKS #
+    "cb" : ("premise", "hypothesis"),
+    "sst2": ("sentence", None),
+    "poem_sentiment" : ("verse_text", None),
+    "mrpc": ("sentence1", "sentence2"),
+    "wnli": ("sentence1", "sentence2"),
+    "rte": ("sentence1", "sentence2"),
+    "sick": ("sentence_A", "sentence_B"),
+    # tweet_eval
+    "hate": ("text", None),
+    "stance_atheism" : ("text", None),
+    "stance_feminist" : ("text", None),
+    # financial_phrasebank
+    "sentences_allagree" : ("sentence", None),
+    "medical_questions_pairs" : ("question_1", "question_2"),
+    "climate_fever" : ("claim", None),
+    "hate_speech18" : ("text", None),
+    # ethos
+    "national_origin" : ("text", None),
+    "race" : ("text", None),
+    "religion" : ("text", None),
 }
 
 task_to_verbalizer = {
     # GLUE benchmark
     # for our paper
     "mnli": None,
-    "mrpc": None,
     "qnli": None,
     "qqp": None,
-    "rte": {
-        # " positive" : 0,  # entailment
-        # " negative" : 1    # not entailment
-        # "entailment" : 0,  # entailment
-        # "not entailment" : 1    # not entailment
-        " Yes" : 0,  # entailment
-        " No" : 1    # not entailment
-        # "True" : 0,  # entailment
-        # "False" : 1    # not entailment
-    },
-    "sst2": {
-        "negative" : 0,
-        "positive" : 1,
-        # "bad" : 0,
-        # "good" : 1,
-        # "terrible" : 0,
-        # "great" : 1,
-    },
-    "wnli": None,
-
-    # other GLUE tasks
-    "cola": None,
-    "stsb": None,
-
-    
-    # TODO : remove other tasks?
-    # SuperGLUE
     "boolq": None,
-    "cb": {
-        " true" : 0,
-        " false" : 1,
-        " neither" : 2,
-    },
-    # other tasks
+    "stsb": None,
     "mr": None,
     "cr": None,
     "mpqa": None,
     "subj": None,
-    "trec": {
-        # 'Description':0,
-        # 'Entity':1,
-        # 'Abbreviation':2, # or Expression
-        # 'Person':3, # or Human
-        # 'Number':4,
-        # 'Location':5,
-        'description':0,
-        'entity':1,
-        'expression':2,
-        'human':3,
-        'number':4,
-        'location':5,
-    },
     "agnews": {
         "World" : 0,
         "Sports" : 1,
@@ -544,8 +511,192 @@ task_to_verbalizer = {
         ' okay' : 2,
         ' good' : 3,
         ' great' : 4,
-    }
+    },
+    
+
+    # REPORTED TASKS #
+    "trec": {
+        # 'Description':0,
+        # 'Entity':1,
+        # 'Abbreviation':2, # or Expression
+        # 'Person':3, # or Human
+        # 'Number':4,
+        # 'Location':5,
+        # 'description':0,
+        # 'entity':1,
+        # 'expression':2,
+        # 'human':3,
+        # 'number':4,
+        # 'location':5,
+
+        # channel verbalizer
+        'DESC' : 0,
+        'ENTY' : 1,
+        'ABBR' : 2,
+        'HUM' : 3,
+        'NUM' : 4, 
+        'LOC' : 5,
+
+        # neutral verbalizer
+        # 'i' : 0,
+        # 'g' : 1,
+        # 'w' : 2,
+        # 'x' : 3,
+        # 'c' : 4, 
+        # 'k' : 5,
+    },
+    "cb": {
+        # " true" : 0,
+        # " false" : 1,
+        # " neither" : 2,
+        
+        # channel verbalizer
+        'contradiction' : 1,
+        'entailment' : 0,
+        'neutral' : 2,
+
+        # neutral verbalizer
+        # 'x' : 1,
+        # 'm' : 0,
+        # 'h' : 2,
+    },
+    "sst2": {
+        # channel verbalizer
+        "negative" : 0,
+        "positive" : 1,
+
+        # neutral verbalizer
+        # "r" : 0,
+        # "s" : 1,
+
+
+        # "bad" : 0,
+        # "good" : 1,
+        # "terrible" : 0,
+        # "great" : 1,
+    },
+    "hate" : {
+        # channel verbalizer
+        "non-hate" : 0,
+        "hate" : 1,
+        
+        # neutral verbalizer
+        # "v" : 0,
+        # "n" : 1,
+    },
+    "poem_sentiment" :{
+        "negative" : 0,
+        "positive" : 1,
+        "no_impact" : 2,
+    },
+    "mrpc": {
+        # VERBALIZER 1
+        # " True" : 1,
+        # " False" : 0,
+        # VERBALIZER 2
+        # "True" : 1,
+        # "False" : 0,
+        # VERBALIZER 3
+        # "Yes" : 1,
+        # "No" : 0,
+        # VERBALIZER 4
+        # " Yes" : 1,
+        # " No" : 0,
+        # VERBALIZER 6
+        # "car" : 1,
+        # "bus" : 0,
+
+        # channel verbalizer
+        "not_equivalent" : 0,
+        "equivalent" : 1,
+
+        # neutral verbalizer
+        # "f" : 0,
+        # "k" : 1
+    },
+    "wnli": {
+        "not_entailment" : 0,
+        "entailment" : 1,
+    },
+    "rte": {
+        # " positive" : 0,  # entailment
+        # " negative" : 1    # not entailment
+        # " Yes" : 0,  # entailment
+        # " No" : 1    # not entailment
+        # "True" : 0,  # entailment
+        # "False" : 1    # not entailment
+
+        # channel verbalizer
+        "entailment" : 0,  # entailment
+        "not_entailment" : 1    # not entailment
+
+        # neutral verbalizer
+        # "l" : 0,  # entailment
+        # "b" : 1    # not entailment
+    },
+    "sick" : {
+        # channel verbalizer
+        "entailment" : 0,
+        "neutral" : 1,
+        "contradiction" : 2,
+
+        # neutral verbalizer
+        # "o" : 0,
+        # "k" : 1,
+        # "m" : 2,
+    },
+    # tweet eval
+    "stance_atheism" : {
+        "none" : 0,
+        "against" : 1,
+        "favor" : 2,
+    },
+    "stance_feminist" : {
+        "none" : 0,
+        "against" : 1,
+        "favor" : 2,
+    },
+
+    # financial_phrasebank
+    "sentences_allagree" : {
+        "negative": 0,
+        "neutral": 1,
+        "positive": 2
+    },
+    "medical_questions_pairs" : {
+        "similar": 1,
+        "dissimilar": 0,
+
+        # neutral verbalizer
+        # "d": 1,
+        # "i": 0,
+    },
+    "climate_fever" : {
+        "supports" : 0,
+        "refutes" : 1,
+        "not enough info" : 2,
+        "disputed" : 3,
+    },
+    "hate_speech18" : {
+        "hate": 0,
+        "no hate": 1
+    },
+    # ethos
+    "national_origin" : {
+        "false": 0,
+        "true": 1,
+    },
+    "race" : {
+        "false": 0,
+        "true": 1,
+    },
+    "religion" : {
+        "false": 0,
+        "true": 1,
+    },
 }
+
+no_validation_tasks = ['sentences_allagree', 'medical_questions_pairs', 'climate_fever', 'hate_speech18', 'national_origin', 'race', 'religion']
 
 
 def prepare_incontext_sampling(train_samples, 

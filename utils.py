@@ -7,9 +7,10 @@ def save_config(args):
     with open(os.path.join(args.output_dir, 'config.json'), 'w') as f:
         args_dict = vars(args)
         if 'ds_config' in args:
-            with open(args.ds_config, "r", encoding="utf-8") as ds_f:
-                ds_config = json.load(ds_f)
-                args_dict['ds_config'] = ds_config
+            if os.path.exists(args.ds_config):
+                with open(args.ds_config, "r", encoding="utf-8") as ds_f:
+                    ds_config = json.load(ds_f)
+                    args_dict['ds_config'] = ds_config
         json.dump(args_dict, f)
 
 
